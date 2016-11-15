@@ -44,11 +44,11 @@ class Text {
 	 */
 	jumpTo(x, y) {
 		let textArr = this.escaped.split('\n')
-		if (y > textArr.length - 1) {
+		if (y > this.height - 1) {
 			throw 'y position is greater than text height.'
 		}
 
-		// ansiEscapes.cursorDown(0) still moves the cursor down a line. I don't like.
+		// ansiEscapes.cursorDown(0) still moves the cursor down a line. No good.
 		if (y > 0) {
 			process.stdout.write(ansiEscapes.cursorDown(y))
 		}

@@ -1,3 +1,4 @@
+const ansiEscapes = require('ansi-escapes')
 const getCursorPosition = require('get-cursor-position')
 const Text = require('./text')
 
@@ -22,8 +23,6 @@ class Section {
 	 * @param {string} [id] - The custom id to store this text.
 	 */
 	text(text, id) {
-		let texts = text.split('\n')
-
 		if (typeof id === 'undefined') {
 			id = this.generateUniqueLineId()
 		}
@@ -92,9 +91,10 @@ class Section {
 		// each text object can contain multiple lines, so go through each one
 		// until we get within the bounds of one.
 		for (let text of texts) {
-			if (text.height < y) {
+			if (text.height - 1 < y) {
 				y -= text.height
-			} else if (text.height >= y) {
+				process.stdout.write(ansiEscapes.cursorDown(text.height))
+			} else if (text.height - 1 >= y) {
 				target = text
 				break
 			}
@@ -105,28 +105,6 @@ class Section {
 		}
 
 		target.jumpTo(x, y)
-	}
-
-	findTextFromY(y) {
-		let texts = Object.keys(this.texts).map(id => this.texts[id])
-		let target
-
-		for (let text of text) {
-			if (text.height < y) {
-				// the y position goes past this text content
-				y -= text.height
-			} else if (text.height >= y) {
-				// the y position is within this text content
-				target = text
-				break
-			}
-		}
-
-		if (target) {
-			return target
-		} else {
-			throw 'y position does not point to a section'
-		}
 	}
 }
 
