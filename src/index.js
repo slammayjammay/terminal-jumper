@@ -27,7 +27,7 @@ gymnast.section('files').text(chalk.red('package.json\nindex.html\nindex.js'))
 
 
 gymnast.render()
-gymnast.jumpTo('enter')
+gymnast.jumpTo('enter').jumpTo(-1, 0)
 
 process.stdin.on('data', (data) => {
 	gymnast.jumpTo('files')
