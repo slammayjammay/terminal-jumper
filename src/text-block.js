@@ -2,7 +2,7 @@ const ansiEscapes = require('ansi-escapes')
 const stripAnsi = require('strip-ansi')
 const getCursorPosition = require('get-cursor-position')
 
-class Text {
+class TextBlock {
 	constructor(text) {
 		this.text = text
 		this.escaped = stripAnsi(text)
@@ -65,4 +65,4 @@ class Text {
 	}
 }
 
-module.exports = Text
+module.exports = TextBlock

@@ -1,15 +1,13 @@
 const ansiEscapes = require('ansi-escapes')
 const getCursorPosition = require('get-cursor-position')
-const Text = require('./text')
+const TextBlock = require('./text-block')
 
 class Section {
 	/**
 	 * For now, assume all sections must have header text.
 	 *
 	 * @param {string} text - The header text.
-	 * @prop {string} header - The header text.
-	 * @prop {integer} height - The number of lines in this section.
-	 * @prop {object} position - Contains the x and y positions.
+	 * @prop {object} position - Contains the global position as { row, col }
 	 */
 	constructor() {
 		this.idCounter = 0
@@ -27,7 +25,8 @@ class Section {
 			id = this.generateUniqueLineId()
 		}
 
-		this.texts[id] = new Text(text)
+		this.texts[id] = new TextBlock(text)
+		return this
 	}
 
 	height() {
