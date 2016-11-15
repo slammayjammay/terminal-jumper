@@ -1,21 +1,19 @@
 {
   "name": "gymnast",
   "version": "0.0.0",
-  "description": "Jump the cursor to output sections in a terminal application.",
-  "main": "index.js",
+  "description": "Easily move the cursor around in terminal applications.",
+  "main": "src/index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
     "terminal",
+    "cursor",
     "output",
     "node"
   ],
   "author": "Scott McKenzie",
   "license": "ISC",
-  "devDependencies": {
-    "chalk": "^1.1.3"
-  },
   "dependencies": {
     "ansi-escapes": "^1.4.0",
     "get-cursor-position": "^1.0.3",
