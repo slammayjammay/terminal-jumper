@@ -1,5 +1,5 @@
 const getCursorPosition = require('get-cursor-position')
-const Line = require('./line')
+const Text = require('./text')
 
 class Section {
 	/**
@@ -10,59 +10,122 @@ class Section {
 	 * @prop {integer} height - The number of lines in this section.
 	 * @prop {object} position - Contains the x and y positions.
 	 */
-	constructor(text) {
-		this.height = 0
-		this.lines = {}
+	constructor() {
+		this.idCounter = 0
+		this.texts = {}
 		this.position = null
-
-		this.addLine(text, 'header')
+		this.offsetCount = 0
 	}
 
 	/**
 	 * @param {string} text - The text to display.
 	 * @param {string} [id] - The custom id to store this text.
 	 */
-	addLine(text, id) {
+	text(text, id) {
 		let texts = text.split('\n')
-		if (texts.length > 1 && typeof id !== 'undefined') {
-			throw 'Cannot set id for multiple lines (text contains newlines)'
-		}
 
 		if (typeof id === 'undefined') {
 			id = this.generateUniqueLineId()
 		}
 
-		for (let text of texts) {
-			this._addLine(text, id)
-			id = this.generateUniqueLineId()
-		}
+		this.texts[id] = new Text(text)
 	}
 
-	/**
-	 * Private method. Adds a line to this section. Text and id are required.
-	 * Strips text of ansi escape codes.
-	 *
-	 * @param {string} text - The text to display.
-	 * @param {string} id - The custom id to store this text.
-	 */
-	_addLine(text, id) {
-		this.lines[id] = new Line(text)
-		this.height += 1
+	height() {
+		let height = 0
+		for (let textId of Object.keys(this.texts)) {
+			let text = this.texts[textId]
+			height += text.height
+		}
+
+		return height
 	}
 
 	generateUniqueLineId() {
-		return `line${this.height}`
+		let id = `text${this.idCounter}`
+		this.idCounter += 1
+		return id
 	}
 
-	updateCursorPosition() {
-		this.position = getCursorPosition.sync()
-	}
-
+	/**
+	 * Logs all the text in section.texts, records the global position, and keeps
+	 * track of the number of times the screen scrolled (see Gymnast#render).
+	 */
 	render() {
-		this.updateCursorPosition()
+		this.position = getCursorPosition.sync()
 
-		for (let lineId of Object.keys(this.lines)) {
-			console.log(this.lines[lineId].text)
+		for (let text of Object.keys(this.texts).map(id => this.texts[id])) {
+			text.render()
+			this.offsetCount += text.getOffsetCount()
+		}
+	}
+
+	getOffsetCount() {
+		let offsetCount = this.offsetCount
+		this.offsetCount = 0
+		return offsetCount
+	}
+
+	/**
+	 * Called after all content is rendered. Gymnast keeps track of how many times
+	 * the screen scrolled (thus invalidating each section's position) and passes
+	 * each section the number of rows their position is off by.
+	 *
+	 * @param {integer} offsetCount - The offset this section's internal position
+	 * needs to update by.
+	 */
+	updatePositionOffset(offsetCount) {
+		this.position.row -= offsetCount
+	}
+
+	/**
+	 * Jumps to the correct cursor position within this section for the given
+	 * coordinate.
+	 *
+	 * @param {integer} x - The x position
+	 * @param {integer} y - The y position
+	 */
+	jumpTo(x = 0, y = 0) {
+		let texts = Object.keys(this.texts).map(id => this.texts[id])
+		let target
+
+		// each text object can contain multiple lines, so go through each one
+		// until we get within the bounds of one.
+		for (let text of texts) {
+			if (text.height < y) {
+				y -= text.height
+			} else if (text.height >= y) {
+				target = text
+				break
+			}
+		}
+
+		if (!target) {
+			throw 'y position does not point to a text block.'
+		}
+
+		target.jumpTo(x, y)
+	}
+
+	findTextFromY(y) {
+		let texts = Object.keys(this.texts).map(id => this.texts[id])
+		let target
+
+		for (let text of text) {
+			if (text.height < y) {
+				// the y position goes past this text content
+				y -= text.height
+			} else if (text.height >= y) {
+				// the y position is within this text content
+				target = text
+				break
+			}
+		}
+
+		if (target) {
+			return target
+		} else {
+			throw 'y position does not point to a section'
 		}
 	}
 }

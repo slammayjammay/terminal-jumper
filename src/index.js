@@ -4,6 +4,8 @@
 const join = require('path').join
 const readline = require('readline')
 const chalk = require('chalk')
+const ansiEscapes = require('ansi-escapes')
+const getCursorPosition = require('get-cursor-position')
 const Gymnast = require(join(__dirname, './gymnast'))
 
 // readline.emitKeypressEvents(process.stdin)
@@ -19,15 +21,15 @@ process.stdin.resume()
 
 let gymnast = new Gymnast()
 
-let enterSection = gymnast.addSection(`${chalk.green('Enter a file glob: ')}`)
-let filesSection = gymnast.addSection(chalk.green('Files found: '))
-
-filesSection.addLine(chalk.red('package.json\nindex.html\nindex.js'))
+gymnast.section('enter').text(`${chalk.green('Enter a file glob: ')}`)
+gymnast.section('files').text(`${chalk.green('Files found: ')}`)
+gymnast.section('files').text(chalk.red('package.json\nindex.html\nindex.js'))
 
 
 gymnast.render()
-gymnast.jumpTo(enterSection, true)
+gymnast.jumpTo('enter')
 
 process.stdin.on('data', (data) => {
-	gymnast.render()
+	gymnast.jumpTo('files')
+	// gymnast.render()
 })

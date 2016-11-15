@@ -10,7 +10,6 @@ class Gymnast {
 	constructor() {
 		this.numSections = 0
 		this.sections = {}
-		this.currentSection = null
 		this.renderedInitial = false
 	}
 
@@ -21,12 +20,18 @@ class Gymnast {
 	 * @param {string} text - The text that will header this section.
 	 * @return {Section} - why not.
 	 */
-	addSection(text) {
-		let section = new Section(text)
+	section(id) {
+		if (this.sections[id]) {
+			return this.sections[id]
+		}
 
-		let uniqueSectionId = this.generateUniqueSectionId()
-		this.sections[uniqueSectionId] = section
-		this.currentSection = section
+		let section = new Section()
+
+		if (typeof id === 'undefined') {
+			id = this.generateUniqueSectionId()
+		}
+		this.numSections += 1
+		this.sections[id] = section
 
 		return section
 	}
@@ -38,7 +43,6 @@ class Gymnast {
 
 	generateUniqueSectionId() {
 		let id = `section${this.numSections}`
-		this.numSections += 1
 		return id
 	}
 
@@ -52,56 +56,66 @@ class Gymnast {
 		return this.sections[lastId]
 	}
 
+	/**
+	 * Erase everything, then render each section. When a section renders, it
+	 * counts the number of times the screen scrolls when its text is printed.
+	 * Once all sections are rendered, call each section to update its internal
+	 * position with the offset count.
+	 */
 	render() {
-		// Need to clear any printed content. First move the cursor to the very top
-		// line, then clear everything down.
 		if (this.renderedInitial) {
 			this.erase()
 		} else {
 			this.renderedInitial = true
 		}
 
-		for (let sectionId of Object.keys(this.sections)) {
-			let section = this.sections[sectionId]
+		let offsetCount = 0
+		for (let section of Object.keys(this.sections).map(id => this.sections[id])) {
 			section.render()
- 			console.log() // add spaces between sections
+			offsetCount += section.getOffsetCount()
+
+			// add a newline between sections
+			let beforePos = getCursorPosition.sync()
+			console.log()
+			let afterPos = getCursorPosition.sync()
+
+			if (beforePos.row === afterPos.row) {
+				offsetCount += 1
+			}
 		}
 
-		this.currentSection = this.lastSection()
+		for (let section of Object.keys(this.sections).map(id => this.sections[id])) {
+			section.updatePositionOffset(offsetCount)
+			offsetCount -= section.height() + 1 // +1 for each newline between sections
+			if (offsetCount <= 0) {
+				return
+			}
+		}
 	}
 
 	erase() {
 		this.jumpTo(this.firstSection())
-		process.stdout.write(ansiEscapes.cursorUp())
 		process.stdout.write(ansiEscapes.eraseDown)
 	}
 
 	/**
-	 * Jumps the cursor to a given section. By default, it will jump to the end
-	 * of the section's header line.
-	 * To do this, it will start at the bottom of the output, and jump up each row
-	 * in each section until it reaches the target section. Then it will jump to
-	 * the end of the line.
+	 * Jumps the cursor to a given section. By default the first row and column.
 	 *
 	 * @param {Section} section - The section we want to jump to.
 	 * Probably a good idea to accept custom id's as well.
+	 * @return {Section}
 	 */
-	jumpTo(targetSection, flag) {
-		if (this.currentSection === targetSection) {
-			return
+	jumpTo(targetSection) {
+		if (typeof targetSection === 'string') {
+			targetSection = this.sections[targetSection]
+			if (!targetSection) throw 'Invalid section id.'
 		}
 
-		let sectionsArray = Object.keys(this.sections).map(id => this.sections[id]).reverse()
-		let currentIdx = sectionsArray.indexOf(this.currentSection)
-		let targetIdx = sectionsArray.indexOf(targetSection)
+		let x = targetSection.position.col - 1
+		let y = targetSection.position.row - 1
+		process.stdout.write(ansiEscapes.cursorTo(x, y))
 
-		for (let section of sectionsArray.slice(currentIdx, targetIdx + 1)) {
-			// move the cursor up by the section height. Plus one because sections
-			// are separated by newlines
-			process.stdout.write(ansiEscapes.cursorUp(section.height + 1))
-		}
-
-		this.currentSection = targetSection
+		return targetSection
 	}
 }
 
