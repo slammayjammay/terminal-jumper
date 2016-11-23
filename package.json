@@ -13,7 +13,7 @@
     "node"
   ],
   "author": "Scott McKenzie",
-  "license": "ISC",
+  "license": "MIT",
   "dependencies": {
     "ansi-escapes": "^1.4.0",
     "get-cursor-position": "^1.0.3",
