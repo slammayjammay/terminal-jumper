@@ -1,6 +1,6 @@
 const ansiEscapes = require('ansi-escapes')
-const Section = require('./section')
 const getCursorPosition = require('get-cursor-position')
+const TextBlock = require('./text-block')
 
 /**
  * Gymnast. Helps jumping the cursor to different parts of outputted sections.
@@ -8,52 +8,77 @@ const getCursorPosition = require('get-cursor-position')
  */
 class Gymnast {
 	constructor() {
-		this.numSections = 0
-		this.sections = {}
-		this.renderedInitial = false
+		this.numBlocks = 0
+		this.blocks = {}
+		this.startPos = null
+	}
+
+	find(id) {
+		return this.blocks[id]
+	}
+
+	/**
+	 * @param {string|TextBlock|array} block - The id, array of id's, or text block object to remove.
+	 */
+	remove(block) {
+		if (typeof block === 'string') {
+			delete this.blocks[block]
+		} else if (block instanceof Array) {
+			for (let id of block) {
+				delete this.blocks[id]
+			}
+		} else if (typeof block === 'object') {
+			let id = Object.keys(this.blocks).find(id => this.blocks[id] === block)
+			delete this.blocks[id]
+		}
 	}
 
 	/**
 	 * Outputs the given text and adds a newline to separate this section from
 	 * other text.
 	 *
-	 * @param {string} text - The text that will header this section.
-	 * @return {Section} - why not.
+	 * @param {string} textString - The text.
+	 * @param {string} [id] - The id to save this block to.
 	 */
-	section(id) {
-		if (this.sections[id]) {
-			return this.sections[id]
-		}
-
-		let section = new Section()
-
+	block(textString, id) {
 		if (typeof id === 'undefined') {
 			id = this.generateUniqueSectionId()
 		}
-		this.sections[id] = section
-		this.numSections += 1
 
-		return section
+		let block = new TextBlock(textString)
+		this.blocks[id] = block
+		this.numBlocks += 1
+
+		return block
 	}
 
-	line(text) {
-		let currentSection = this.lastSection()
-		currentSection.addLine(text)
+	/**
+	 * Creates a space between text blocks by simply creating an empty one.
+	 */
+	break() {
+		this.block('')
 	}
 
 	generateUniqueSectionId() {
-		let id = `section${this.numSections}`
-		return id
+		return `block${this.numBlocks}`
 	}
 
-	firstSection() {
-		let firstId = Object.keys(this.sections)[0]
-		return this.sections[firstId]
+	firstBlock() {
+		let firstId = Object.keys(this.blocks)[0]
+		return this.blocks[firstId]
 	}
 
-	lastSection() {
-		let lastId = Object.keys(this.sections)[this.numSections - 1]
-		return this.sections[lastId]
+	lastBlock() {
+		let lastId = Object.keys(this.blocks)[this.numBlocks - 1]
+		return this.blocks[lastId]
+	}
+
+	height() {
+		let totalHeight = 0
+		for (let block of Object.keys(this.blocks).map(id => this.blocks[id])) {
+			totalHeight += block.height()
+		}
+		return totalHeight
 	}
 
 	/**
@@ -61,62 +86,93 @@ class Gymnast {
 	 * counts the number of times the screen scrolls when its text is printed.
 	 * Once all sections are rendered, call each section to update its internal
 	 * position with the offset count.
+	 *
+	 * @param {TextBlock} textBlock - The textBlock to begin rendering.
 	 */
-	render() {
+	render(textBlock = this.firstBlock()) {
 		if (this.renderedInitial) {
-			this.erase()
+			this.erase(textBlock)
 		} else {
 			this.renderedInitial = true
 		}
 
-		let offsetCount = 0
-		for (let section of Object.keys(this.sections).map(id => this.sections[id])) {
-			section.render()
-			offsetCount += section.getOffsetCount()
+		// Record the cursor position. If the terminal needs to scroll up to display
+		// all the text, we need to update the position of each text block.
+		let startPos = getCursorPosition.sync().row
+		let totalHeight = process.stdout.rows
+		let leftover = (startPos + this.height()) - totalHeight
 
-			// add a newline between sections
-			let beforePos = getCursorPosition.sync()
-			console.log()
-			let afterPos = getCursorPosition.sync()
+		let allBlocks = Object.keys(this.blocks).map(id => this.blocks[id])
+		let renderBlocks = allBlocks.slice(allBlocks.indexOf(textBlock))
 
-			if (beforePos.row === afterPos.row) {
-				offsetCount += 1
-			}
+		// first render each block
+		for (let block of renderBlocks) {
+			block.render()
 		}
 
-		for (let section of Object.keys(this.sections).map(id => this.sections[id])) {
-			section.updatePositionOffset(offsetCount)
-			offsetCount -= section.height() + 1 // +1 for each newline between sections
-			if (offsetCount <= 0) {
-				return
+		// then update each block's position
+		for (let block of renderBlocks) {
+			if (leftover > 0) {
+				block.updatePositionOffset(leftover)
 			}
 		}
 	}
 
-	erase() {
-		this.jumpTo(this.firstSection())
+	erase(block = this.firstBlock()) {
+		this.jumpTo(block)
 		process.stdout.write(ansiEscapes.eraseDown)
 	}
 
 	/**
 	 * Jumps the cursor to a given section. By default the first row and column.
 	 *
-	 * @param {Section} section - The section we want to jump to.
-	 * Probably a good idea to accept custom id's as well.
-	 * @return {Section}
+	 * @param {string|TextBlock} targetBlock - The block object or id we want to jump to.
+	 * @param {integer} col - The col in this block we want to jump to.
+	 * @param {integer} row - The row in this block we want to jump to.
 	 */
-	jumpTo(targetSection) {
-		if (typeof targetSection === 'string') {
-			targetSection = this.sections[targetSection]
-			if (!targetSection) throw 'Invalid section id.'
+	jumpTo(targetBlock, col = 0, row = 0) {
+		if (typeof targetBlock === 'string') {
+			targetBlock = this.blocks[targetBlock]
+			if (!targetBlock) {
+				throw 'Not a section or valid section ID.'
+			}
 		}
 
-		let x = targetSection.position.col - 1
-		let y = targetSection.position.row - 1
+		let x = targetBlock.position.col - 1
+		let y = targetBlock.position.row - 1
 		process.stdout.write(ansiEscapes.cursorTo(x, y))
 
-		return targetSection
+		targetBlock.jumpTo(col, row)
+
+		return targetBlock
+	}
+
+	/**
+	 * @param {object} col - An object in the form of { col, row }.
+	 * @param {integer} col - An integer of the target column.
+	 * @param {integer} row - An integer of the target row.
+	 * @return {null}
+	 */
+	cursorTo(col = 0, row = 0) {
+		let x
+		let y
+
+		if (typeof col === 'object') {
+			x = col.col
+			y = col.row
+		} else if (typeof col === 'number') {
+			x = col
+			y = row
+		}
+		process.stdout.write(ansiEscapes.cursorTo(x - 1, y - 1))
+	}
+
+	reset() {
+		this.erase()
+		this.renderedInitial = false
+		this.blocks = {}
+		this.numBlocks = 0
 	}
 }
 
-module.exports = Gymnast
+module.exports = new Gymnast()

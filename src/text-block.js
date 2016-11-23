@@ -3,30 +3,44 @@ const stripAnsi = require('strip-ansi')
 const getCursorPosition = require('get-cursor-position')
 
 class TextBlock {
-	constructor(text) {
-		this.text = text
-		this.escaped = stripAnsi(text)
-		this.length = this.text.length
-		this.height = this.text.split('\n').length
-
+	constructor(text = '') {
+		this.text = ''
+		this.escapedText = ''
+		this.length = 0
+		this.position = null
 		this.offsetCount = 0
+
+		this.append(text)
+	}
+
+	append(text) {
+		this.text += text
+		this.escapedText = stripAnsi(this.text)
+		this.length = this.text.length
+
+		return this
 	}
 
 	/**
-	 * Prints all text content. Keeps track of how many times the screen scrolled.
+	 * @param {integer} idx - The index to begin overwriting.
 	 */
+	content(text) {
+		this.text = ''
+		this.append(text)
+		return this
+	}
+
+	height() {
+		return this.text.split('\n').length
+	}
+
 	render() {
-		let lines = this.text.split('\n')
+		this.position = getCursorPosition.sync()
+		console.log(this.text)
+	}
 
-		for (let line of lines) {
-			let beforePos = getCursorPosition.sync()
-			console.log(line)
-			let afterPos = getCursorPosition.sync()
-
-			if (afterPos.row === beforePos.row) {
-				this.offsetCount += 1
-			}
-		}
+	updatePositionOffset(offsetCount) {
+		this.position.row -= offsetCount
 	}
 
 	/**
@@ -43,8 +57,8 @@ class TextBlock {
 	 * @param {integer} y - The y position.
 	 */
 	jumpTo(x, y) {
-		let textArr = this.escaped.split('\n')
-		if (y > this.height - 1) {
+		let textArr = this.escapedText.split('\n')
+		if (y > this.height() - 1) {
 			throw 'y position is greater than text height.'
 		}
 
