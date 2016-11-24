@@ -2,6 +2,10 @@ const ansiEscapes = require('ansi-escapes')
 const stripAnsi = require('strip-ansi')
 const getCursorPosition = require('get-cursor-position')
 
+/**
+ * TextBlock
+ * @class
+ */
 class TextBlock {
 	constructor(text = '') {
 		this.text = ''
@@ -13,6 +17,12 @@ class TextBlock {
 		this.append(text)
 	}
 
+	/**
+	 * Appends a string of text to this block.
+	 *
+	 * @param {string} text - The string to append.
+	 * @return {TextBlock}
+	 */
 	append(text) {
 		this.text += text
 		this.escapedText = stripAnsi(this.text)
@@ -22,37 +32,45 @@ class TextBlock {
 	}
 
 	/**
-	 * @param {integer} idx - The index to begin overwriting.
+	 * Overwrite this text block's text with the given string.
+	 *
+	 * @param {string} text - The text to save to this block.
+	 * @return {TextBlock}
 	 */
 	content(text) {
 		this.text = ''
 		this.append(text)
+
 		return this
 	}
 
+	/**
+	 * Returns the number or rows this text block fills.
+	 *
+	 * @return {number}
+	 */
 	height() {
 		return this.text.split('\n').length
 	}
 
+	/**
+	 * Outputs this text block's content and saves the cursor position.
+	 */
 	render() {
 		this.position = getCursorPosition.sync()
 		console.log(this.text)
 	}
 
+	/**
+	 * Updates the position of this text block. See TerminalJumper#render.
+	 */
 	updatePositionOffset(offsetCount) {
 		this.position.row -= offsetCount
 	}
 
 	/**
-	 * Called immediately after the parent section is rendered.
-	 */
-	getOffsetCount() {
-		let offsetCount = this.offsetCount
-		this.offsetCount = 0
-		return offsetCount
-	}
-
-	/**
+	 * Jumps the cursor to a column and row within this text block.
+	 *
 	 * @param {integer} x - The x position. If negative, will jump to the end of the line.
 	 * @param {integer} y - The y position.
 	 */

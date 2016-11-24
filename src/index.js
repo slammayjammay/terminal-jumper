@@ -3,28 +3,40 @@ const getCursorPosition = require('get-cursor-position')
 const TextBlock = require('./text-block')
 
 /**
- * Gymnast. Helps jumping the cursor to different parts of outputted sections.
- * Useful for clearing specific lines or updating text.
+ * TerminalJumper. Helps jumping the cursor to different parts of outputted
+ * sections. Useful for clearing specific lines or updating text.
+ * @class
  */
-class Gymnast {
+class TerminalJumper {
 	constructor() {
 		this.numBlocks = 0
 		this.blocks = {}
 		this.startPos = null
 	}
 
+	/**
+	 * Gets a saved block of text.
+	 *
+	 * @param {string} id - The given id.
+	 * @return {TextBlock}
+	 */
 	find(id) {
 		return this.blocks[id]
 	}
 
 	/**
-	 * @param {string|TextBlock|array} block - The id, array of id's, or text block object to remove.
+	 * Removes a single or multiple blocks of text.
+	 *
+	 * @param {string|TextBlock|array} block - The id, array of id's, text block, or array of text blocks to remove.
 	 */
 	remove(block) {
 		if (typeof block === 'string') {
 			delete this.blocks[block]
 		} else if (block instanceof Array) {
 			for (let id of block) {
+				if (typeof id === 'string') {
+					let id = Object.keys(this.blocks).find(id => this.blocks[id] === block)
+				}
 				delete this.blocks[id]
 			}
 		} else if (typeof block === 'object') {
@@ -34,15 +46,15 @@ class Gymnast {
 	}
 
 	/**
-	 * Outputs the given text and adds a newline to separate this section from
-	 * other text.
+	 * Saves a block of text to render by an id.
 	 *
-	 * @param {string} textString - The text.
+	 * @param {string} textString - The text to output.
 	 * @param {string} [id] - The id to save this block to.
+	 * @return {TextBlock}
 	 */
 	block(textString, id) {
 		if (typeof id === 'undefined') {
-			id = this.generateUniqueSectionId()
+			id = this._generateUniqueSectionId()
 		}
 
 		let block = new TextBlock(textString)
@@ -59,20 +71,31 @@ class Gymnast {
 		this.block('')
 	}
 
-	generateUniqueSectionId() {
-		return `block${this.numBlocks}`
-	}
-
+	/**
+	 * Gets the first text block.
+	 *
+	 * @return {TextBlock}
+	 */
 	firstBlock() {
 		let firstId = Object.keys(this.blocks)[0]
 		return this.blocks[firstId]
 	}
 
+	/**
+	 * Gets the last text block.
+	 *
+	 * @return {TextBlock}
+	 */
 	lastBlock() {
 		let lastId = Object.keys(this.blocks)[this.numBlocks - 1]
 		return this.blocks[lastId]
 	}
 
+	/**
+	 * Gets the total height of all text blocks.
+	 *
+	 * @return {number}
+	 */
 	height() {
 		let totalHeight = 0
 		for (let block of Object.keys(this.blocks).map(id => this.blocks[id])) {
@@ -82,16 +105,15 @@ class Gymnast {
 	}
 
 	/**
-	 * Erase everything, then render each section. When a section renders, it
-	 * counts the number of times the screen scrolls when its text is printed.
-	 * Once all sections are rendered, call each section to update its internal
-	 * position with the offset count.
-	 *
-	 * @param {TextBlock} textBlock - The textBlock to begin rendering.
+	 * Erases all output, then renders each text block. When a text block's
+	 * `render` method is called, the text block saves it's cursor position.
+	 * But since the terminal may scroll down to show output, each position needs
+	 * to be updated. Once all blocks are rendered, update each with their correct
+	 * position.
 	 */
-	render(textBlock = this.firstBlock()) {
+	render() {
 		if (this.renderedInitial) {
-			this.erase(textBlock)
+			this.erase(this.firstBlock())
 		} else {
 			this.renderedInitial = true
 		}
@@ -118,8 +140,11 @@ class Gymnast {
 		}
 	}
 
-	erase(block = this.firstBlock()) {
-		this.jumpTo(block)
+	/**
+	 * Erases all output.
+	 */
+	erase() {
+		this.jumpTo(this.firstBlock())
 		process.stdout.write(ansiEscapes.eraseDown)
 	}
 
@@ -129,6 +154,7 @@ class Gymnast {
 	 * @param {string|TextBlock} targetBlock - The block object or id we want to jump to.
 	 * @param {integer} col - The col in this block we want to jump to.
 	 * @param {integer} row - The row in this block we want to jump to.
+	 * @return {TextBlock}
 	 */
 	jumpTo(targetBlock, col = 0, row = 0) {
 		if (typeof targetBlock === 'string') {
@@ -148,6 +174,8 @@ class Gymnast {
 	}
 
 	/**
+	 * Moves the cursor to a global position.
+	 *
 	 * @param {object} col - An object in the form of { col, row }.
 	 * @param {integer} col - An integer of the target column.
 	 * @param {integer} row - An integer of the target row.
@@ -167,12 +195,24 @@ class Gymnast {
 		process.stdout.write(ansiEscapes.cursorTo(x - 1, y - 1))
 	}
 
+	/**
+	 * Erases all text and deletes all text blocks.
+	 */
 	reset() {
 		this.erase()
 		this.renderedInitial = false
 		this.blocks = {}
 		this.numBlocks = 0
 	}
+
+	/**
+	 * Generates a unique id to save a block to.
+	 *
+	 * @return {string}
+	 */
+	_generateUniqueSectionId() {
+		return `block${this.numBlocks}`
+	}
 }
 
-module.exports = new Gymnast()
+module.exports = new TerminalJumper()
