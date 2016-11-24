@@ -125,15 +125,14 @@ class TerminalJumper {
 		let leftover = (startPos + this.height()) - totalHeight
 
 		let allBlocks = Object.keys(this.blocks).map(id => this.blocks[id])
-		let renderBlocks = allBlocks.slice(allBlocks.indexOf(textBlock))
 
 		// first render each block
-		for (let block of renderBlocks) {
+		for (let block of allBlocks) {
 			block.render()
 		}
 
 		// then update each block's position
-		for (let block of renderBlocks) {
+		for (let block of allBlocks) {
 			if (leftover > 0) {
 				block.updatePositionOffset(leftover)
 			}
