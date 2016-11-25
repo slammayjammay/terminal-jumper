@@ -119,24 +119,26 @@ class TerminalJumper {
 		}
 
 		// Record the cursor position. If the terminal needs to scroll up to display
-		// all the text, we need to update the position of each text block.
-		let startPos = getCursorPosition.sync().row
-		let totalHeight = process.stdout.rows
-		let leftover = (startPos + this.height()) - totalHeight
+		// all the text, each text block's position needs to be updated.
+		let startPos = getCursorPosition.sync()
 
 		let allBlocks = Object.keys(this.blocks).map(id => this.blocks[id])
-
-		// first render each block
 		for (let block of allBlocks) {
 			block.render()
 		}
 
-		// then update each block's position
-		for (let block of allBlocks) {
-			if (leftover > 0) {
-				block.updatePositionOffset(leftover)
+		// getCursorPosition.sync needs some time to calculate
+		setTimeout(() => {
+			// update each block's position
+			for (let block of allBlocks) {
+				let totalHeight = process.stdout.rows
+				let leftover = (startPos.row + this.height()) - totalHeight
+
+				if (leftover > 0) {
+					block.updatePositionOffset(leftover)
+				}
 			}
-		}
+		}, 100)
 	}
 
 	/**
