@@ -127,18 +127,20 @@ class TerminalJumper {
 			block.render()
 		}
 
-		// getCursorPosition.sync needs some time to calculate
-		setTimeout(() => {
-			// update each block's position
-			for (let block of allBlocks) {
-				let totalHeight = process.stdout.rows
-				let leftover = (startPos.row + this.height()) - totalHeight
-
-				if (leftover > 0) {
-					block.updatePositionOffset(leftover)
-				}
+		for (let block of allBlocks) {
+			// getCursorPosition.sync isn't synchronous. If `render` is called too
+			// fast, startPos is undefined and throws an error. For now, ignore it.
+			if (!startPos) {
+				continue
 			}
-		}, 100)
+
+			let totalHeight = process.stdout.rows
+			let leftover = (startPos.row + this.height()) - totalHeight
+
+			if (leftover > 0) {
+				block.updatePositionOffset(leftover)
+			}
+		}
 	}
 
 	/**
