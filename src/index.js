@@ -112,11 +112,7 @@ class TerminalJumper {
 	 * position.
 	 */
 	render() {
-		if (this.renderedInitial) {
-			this.erase(this.firstBlock())
-		} else {
-			this.renderedInitial = true
-		}
+		this.erase()
 
 		// Record the cursor position. If the terminal needs to scroll up to display
 		// all the text, each text block's position needs to be updated.
@@ -141,14 +137,20 @@ class TerminalJumper {
 				block.updatePositionOffset(leftover)
 			}
 		}
+
+		this.topOfText = this.firstBlock()
 	}
 
 	/**
 	 * Erases all output.
 	 */
 	erase() {
-		this.jumpTo(this.firstBlock())
-		process.stdout.write(ansiEscapes.eraseDown)
+		let firstBlock = this.firstBlock() || this.topOfText
+		// ick -- only jump to the block if it has a position (if it's been printed)
+		if (firstBlock.position) {
+			this.jumpTo(firstBlock)
+			process.stdout.write(ansiEscapes.eraseDown)
+		}
 	}
 
 	/**
