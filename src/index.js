@@ -174,7 +174,7 @@ class TerminalJumper {
 		if (typeof targetBlock === 'string') {
 			targetBlock = this.blocks[targetBlock]
 			if (!targetBlock) {
-				throw 'Not a section or valid section ID.'
+				throw new Error('Not a section or valid section ID.')
 			}
 		}
 
