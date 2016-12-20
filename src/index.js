@@ -45,6 +45,15 @@ class TerminalJumper {
 		}
 	}
 
+	removeAllMatching(regex) {
+		let ids = Object.keys(this.blocks)
+		for (let id of ids) {
+			if (regex.test(id)) {
+				this.remove(id)
+			}
+		}
+	}
+
 	/**
 	 * Saves a block of text to render by an id.
 	 *
