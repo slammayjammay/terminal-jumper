@@ -1,6 +1,6 @@
 # terminal-jumper
 ```
-  $ npm install --save terminal-jumper
+$ npm install --save terminal-jumper
 ```
 
 `terminal-jumper` makes it easy to output text for the terminal, as well as
@@ -33,7 +33,7 @@ columns and rows to move to within this block.
 
 ## Example
 Require:
-```
+```js
 const jumper = require('terminal-jumper')
 ```
 
@@ -49,7 +49,7 @@ file-2.txt
 ```
 
 You could use like so:
-```
+```js
 jumper.block('Folders:')
 jumper.block('folder-1/')
 jumper.block('folder-2/')
@@ -66,13 +66,13 @@ jumper.render()
 ```
 
 To output some prompt and move the cursor to the end of the line, you could do:
-```
+```js
 jumper.block('Enter some user input: ', 'prompt')
 jumper.render()
 jumper.jumpTo('prompt', -1)
 ```
 
 Which would output the following:
-```
-Enter some user input: _
+```sh
+$ Enter some user input: _
 ```
