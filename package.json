@@ -1,6 +1,6 @@
 {
   "name": "terminal-jumper",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "description": "Easily move the cursor around text blocks in terminal applications.",
   "main": "lib/index.js",
   "scripts": {
