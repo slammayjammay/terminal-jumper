@@ -1,6 +1,6 @@
 const ansiEscapes = require('ansi-escapes')
 const stripAnsi = require('strip-ansi')
-const getCursorPosition = require('get-cursor-position')
+const getCursorPosition = require('@patrickkettner/get-cursor-position')
 
 /**
  * TextBlock
