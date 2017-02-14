@@ -114,25 +114,34 @@ class TerminalJumper {
 	}
 
 	/**
-	 * Erases all output, then renders each text block. When a text block's
-	 * `render` method is called, the text block saves it's cursor position.
-	 * But since the terminal may scroll down to show output, each position needs
-	 * to be updated. Once all blocks are rendered, update each with their correct
-	 * position.
+	 * Erases all output starting from the given textblock, then renders each text
+	 * block. When a text block's `render` method is called, the text block saves
+	 * it's cursor position. But since the terminal may scroll down to show
+	 * output, each position needs to be updated. Once all blocks are rendered,
+	 * update each with their correct position.
+	 * @param {Textblock|id} block - The block to start rendering from.
 	 */
-	render() {
-		this.erase()
+	render(block) {
+		if (typeof block === 'undefined') {
+			block = this.firstBlock() || this.topOfText
+		} else if (typeof block === 'string') {
+			block = this.find(block)
+		}
+
+		this.erase(block)
 
 		// Record the cursor position. If the terminal needs to scroll up to display
 		// all the text, each text block's position needs to be updated.
 		let startPos = getCursorPosition.sync()
 
 		let allBlocks = Object.keys(this.blocks).map(id => this.blocks[id])
-		for (let block of allBlocks) {
+		let renderBlocks = allBlocks.slice(allBlocks.indexOf(block))
+
+		for (let block of renderBlocks) {
 			block.render()
 		}
 
-		for (let block of allBlocks) {
+		for (let block of renderBlocks) {
 			// getCursorPosition.sync isn't synchronous. If `render` is called too
 			// fast, startPos is undefined and throws an error. For now, ignore it.
 			if (!startPos) {
@@ -151,15 +160,18 @@ class TerminalJumper {
 	}
 
 	/**
-	 * Erases all output.
+	 * Erases all output starting from a given block.
+	 * @param {Textblock|string} block - The block to start erasing from (inclusively).
 	 */
-	erase() {
-		let firstBlock = this.firstBlock() || this.topOfText
-		// ick -- only jump to the block if it has a position (if it's been printed)
-		if (firstBlock.position) {
-			this.jumpTo(firstBlock)
-			process.stdout.write(ansiEscapes.eraseDown)
+	erase(block) {
+		if (typeof block === 'undefined') {
+			block = this.firstBlock() || this.topOfText
+		} else if (typeof block === 'string') {
+			block = this.find(block)
 		}
+
+		this.jumpTo(block)
+		process.stdout.write(ansiEscapes.eraseDown)
 	}
 
 	/**
@@ -176,6 +188,11 @@ class TerminalJumper {
 			if (!targetBlock) {
 				throw new Error('Not a section or valid section ID.')
 			}
+		}
+
+		// ick -- only jump to the block if it has a position (if it's been printed)
+		if (!targetBlock.position) {
+			return
 		}
 
 		let x = targetBlock.position.col - 1
