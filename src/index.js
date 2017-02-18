@@ -128,32 +128,38 @@ class TerminalJumper {
 			block = this.find(block)
 		}
 
+		// erase from the given block down, inclusive
 		this.erase(block)
 
-		// Record the cursor position. If the terminal needs to scroll up to display
-		// all the text, each text block's position needs to be updated.
-		let startPos = getCursorPosition.sync()
-
+		// render all blocks starting from the given block down, inclusive
 		let allBlocks = Object.keys(this.blocks).map(id => this.blocks[id])
-		let renderBlocks = allBlocks.slice(allBlocks.indexOf(block))
+		let blocksToRender = allBlocks.slice(allBlocks.indexOf(block))
 
-		for (let block of renderBlocks) {
+		for (let block of blocksToRender) {
 			block.render()
 		}
 
-		for (let block of renderBlocks) {
-			// getCursorPosition.sync isn't synchronous. If `render` is called too
-			// fast, startPos is undefined and throws an error. For now, ignore it.
-			if (!startPos) {
-				continue
+		// once a block renders, it records the row that it prints on. If the
+		// terminal needs to scroll at all, each block will need to update its
+		// position.
+
+		// to update the position, first record the current row and then
+		// calculate the total lines that will scroll after the render. Then
+		// iterate through each block, applying the number of lines scrolled to
+		// the blocks position and decreasing it by the block's height.
+
+		let startPos = getCursorPosition.sync()
+		let totalHeight = process.stdout.rows
+		let leftover = (startPos.row + this.height()) - totalHeight
+
+		// update each block's position
+		for (let block of blocksToRender) {
+			if (leftover <= 0) {
+				break
 			}
 
-			let totalHeight = process.stdout.rows
-			let leftover = (startPos.row + this.height()) - totalHeight
-
-			if (leftover > 0) {
-				block.updatePositionOffset(leftover)
-			}
+			block.updatePositionOffset(leftover)
+			leftover -= block.height()
 		}
 
 		this.topOfText = this.firstBlock()
