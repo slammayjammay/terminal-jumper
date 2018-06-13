@@ -58,7 +58,15 @@ class TextBlock {
 	 */
 	render() {
 		this.position = getCursorPosition.sync()
-		console.log(this.text)
+
+		const lines = this.text.split('\n');
+		for (const line of lines) {
+			let text = ansiEscapes.cursorLeft;
+			text += ansiEscapes.eraseEndLine;
+			text += line + '\n';
+
+			process.stdout.write(text);
+		}
 	}
 
 	/**

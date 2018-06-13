@@ -128,16 +128,11 @@ class TerminalJumper {
 			block = this.find(block)
 		}
 
-		// erase from the given block down, inclusive
-		this.erase(block)
+		this.jumpTo(block, 0);
 
 		// render all blocks starting from the given block down, inclusive
 		let allBlocks = Object.keys(this.blocks).map(id => this.blocks[id])
 		let blocksToRender = allBlocks.slice(allBlocks.indexOf(block))
-
-		for (let block of blocksToRender) {
-			block.render()
-		}
 
 		// once a block renders, it records the row that it prints on. If the
 		// terminal needs to scroll at all, each block will need to update its
@@ -152,6 +147,10 @@ class TerminalJumper {
 		let totalHeight = process.stdout.rows
 		let leftover = (startPos.row + this.height()) - totalHeight
 
+		for (let block of blocksToRender) {
+			block.render()
+		}
+
 		// update each block's position
 		for (let block of blocksToRender) {
 			if (leftover <= 0) {
@@ -161,6 +160,8 @@ class TerminalJumper {
 			block.updatePositionOffset(leftover)
 			leftover -= block.height()
 		}
+
+		process.stdout.write(ansiEscapes.eraseDown);
 
 		this.topOfText = this.firstBlock()
 	}
