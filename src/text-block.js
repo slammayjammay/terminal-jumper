@@ -2,6 +2,11 @@ const ansiEscapes = require('ansi-escapes')
 const stripAnsi = require('strip-ansi')
 const getCursorPosition = require('@patrickkettner/get-cursor-position')
 
+// in order to calculate height correctly, translate tab characters into spaces.
+// this way we can check if `string.length` is more than `process.sdtout.columns`
+const TAB_WIDTH = 8;
+const TAB_FAKER = new Array(TAB_WIDTH).join(' ');
+
 /**
  * TextBlock
  * @class
@@ -12,7 +17,6 @@ class TextBlock {
 		this.escapedText = ''
 		this.length = 0
 		this.position = null
-		this.offsetCount = 0
 
 		this.append(text)
 	}
@@ -24,6 +28,8 @@ class TextBlock {
 	 * @return {TextBlock}
 	 */
 	append(text) {
+		text = text.replace(/\t/g, TAB_FAKER);
+
 		this.text += text
 		this.escapedText = stripAnsi(this.text)
 		this.length = this.text.length
@@ -50,7 +56,18 @@ class TextBlock {
 	 * @return {number}
 	 */
 	height() {
-		return this.text.split('\n').length
+		let height = 0
+		let lines = this.escapedText.split('\n')
+
+		for (let line of lines) {
+			height += 1
+
+			if (line.length > process.stdout.columns) {
+				height += 1
+			}
+		}
+
+		return height
 	}
 
 	/**
