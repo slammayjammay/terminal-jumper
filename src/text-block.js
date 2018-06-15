@@ -70,13 +70,6 @@ class TextBlock {
 	}
 
 	/**
-	 * Updates the position of this text block. See TerminalJumper#render.
-	 */
-	updatePositionOffset(offsetCount) {
-		this.position.row -= offsetCount
-	}
-
-	/**
 	 * Jumps the cursor to a column and row within this text block.
 	 *
 	 * @param {integer} x - The x position. If negative, will jump to the end of the line.

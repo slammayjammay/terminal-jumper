@@ -45,13 +45,21 @@ class TerminalJumper {
 		}
 	}
 
-	removeAllMatching(regex) {
+	findAllMatching(regex) {
+		let blocks = []
 		let ids = Object.keys(this.blocks)
+
 		for (let id of ids) {
 			if (regex.test(id)) {
-				this.remove(id)
+				blocks.push(this.blocks[id])
 			}
 		}
+
+		return blocks
+	}
+
+	removeAllMatching(regex) {
+		this.findAllMatching(regex).forEach(block => this.remove(block));
 	}
 
 	/**
@@ -114,53 +122,23 @@ class TerminalJumper {
 	}
 
 	/**
-	 * Erases all output starting from the given textblock, then renders each text
-	 * block. When a text block's `render` method is called, the text block saves
-	 * it's cursor position. But since the terminal may scroll down to show
-	 * output, each position needs to be updated. Once all blocks are rendered,
-	 * update each with their correct position.
-	 * @param {Textblock|id} block - The block to start rendering from.
+	 * Renders all blocks.
 	 */
-	render(block) {
-		if (typeof block === 'undefined') {
-			block = this.firstBlock() || this.topOfText
-		} else if (typeof block === 'string') {
-			block = this.find(block)
-		}
+	render() {
+		this.jumpTo(this.firstBlock() || this.topOfText);
 
-		this.jumpTo(block, 0);
-
-		// render all blocks starting from the given block down, inclusive
 		let allBlocks = Object.keys(this.blocks).map(id => this.blocks[id])
-		let blocksToRender = allBlocks.slice(allBlocks.indexOf(block))
-
-		// once a block renders, it records the row that it prints on. If the
-		// terminal needs to scroll at all, each block will need to update its
-		// position.
-
-		// to update the position, first record the current row and then
-		// calculate the total lines that will scroll after the render. Then
-		// iterate through each block, applying the number of lines scrolled to
-		// the blocks position and decreasing it by the block's height.
 
 		let startPos = getCursorPosition.sync()
 		let totalHeight = process.stdout.rows
-		let leftover = (startPos.row + this.height()) - totalHeight
+		let scrollAmount = (startPos.row + this.height()) - totalHeight
 
-		for (let block of blocksToRender) {
-			block.render()
+		if (scrollAmount > 0) {
+			console.log(new Array(scrollAmount).join('\n'));
+			process.stdout.write(ansiEscapes.cursorUp(this.height()));
 		}
 
-		// update each block's position
-		for (let block of blocksToRender) {
-			if (leftover <= 0) {
-				break
-			}
-
-			block.updatePositionOffset(leftover)
-			leftover -= block.height()
-		}
-
+		allBlocks.forEach(block => block.render());
 		process.stdout.write(ansiEscapes.eraseDown);
 
 		this.topOfText = this.firstBlock()
