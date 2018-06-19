@@ -134,6 +134,7 @@ class TerminalJumper {
 		let scrollAmount = (startPos.row + this.height()) - totalHeight
 
 		if (scrollAmount > 0) {
+			process.stdout.write(ansiEscapes.cursorTo(0, process.stdout.rows));
 			console.log(new Array(scrollAmount).join('\n'));
 			process.stdout.write(ansiEscapes.cursorUp(this.height()));
 		}
