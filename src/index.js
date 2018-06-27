@@ -131,9 +131,9 @@ class TerminalJumper {
 
 		division.scroll(scrollX, scrollY);
 
-		// if (!options.noRender) {
-		// 	division._render(this.renderPosition);
-		// }
+		if (!options.noRender) {
+			division._render(this.renderPosition);
+		}
 	}
 
 	scrollX(division, scrollX, options) {
