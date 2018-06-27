@@ -5,8 +5,6 @@ const stripAnsi = require('strip-ansi');
 const sliceAnsi = require('slice-ansi');
 const TextBlock = require('./TextBlock');
 
-// TODO: make use of block.escapedText instead of stripAnsi()
-
 const DEFAULT_OPTIONS = {
 	/**
 	 * The id that TerminalJumper associates with this division.
