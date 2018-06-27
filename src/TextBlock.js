@@ -15,11 +15,10 @@ const TAB_FAKER = new Array(TAB_WIDTH).join(' ');
  */
 class TextBlock {
 	constructor(text = '') {
-		this.text = ''
-		this.escapedText = ''
-		this.length = 0
+		this.text = '';
+		this.escapedText = '';
 
-		this.append(text)
+		this.append(text);
 	}
 
 	/**
@@ -30,7 +29,6 @@ class TextBlock {
 	 */
 	append(text) {
 		text = text.replace(/\t/g, TAB_FAKER);
-
 		this.text += text;
 
 		return this;
@@ -111,34 +109,6 @@ class TextBlock {
 
 		return stripAnsi(lines[row]).length;
 	}
-
-	/**
-	 * Jumps the cursor to a column and row within this text block.
-	 *
-	 * @param {integer} x - The x position. If negative, will jump to the end of the line.
-	 * @param {integer} y - The y position.
-	 */
-	// jumpTo(x, y) {
-	// 	let textArr = this.escapedText.split('\n')
-	// 	if (y > this.height() - 1) {
-	// 		throw 'y position is greater than text height.'
-	// 	}
-
-	// 	// ansiEscapes.cursorDown(0) still moves the cursor down a line. No good.
-	// 	if (y > 0) {
-	// 		process.stdout.write(ansiEscapes.cursorDown(y))
-	// 	}
-
-	// 	process.stdout.write(ansiEscapes.cursorLeft)
-	// 	if (x < 0) {
-	// 		// jump to the end of this line
-	// 		let lineLength = textArr[y].length
-	// 		process.stdout.write(ansiEscapes.cursorMove(lineLength))
-	// 		process.stdout.write(ansiEscapes.cursorMove(x + 1))
-	// 	} else {
-	// 		process.stdout.write(ansiEscapes.cursorMove(x))
-	// 	}
-	// }
 }
 
 module.exports = TextBlock

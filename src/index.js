@@ -70,13 +70,7 @@ class TerminalJumper {
 
 	height() {
 		if (this._dirty) {
-			const heights = this.divisions.map(division => {
-				const height = division.height(this.termSize);
-
-				return height + division.top;
-			});
-
-			this._height = Math.max(...heights);
+			this._calculateDimensions();
 		}
 
 		return this._height;
@@ -91,8 +85,7 @@ class TerminalJumper {
 		}
 
 		if (this._dirty) {
-			const totalHeight = this.height();
-			const numRowsToAllocate = (this.renderPosition.row + totalHeight) - this.termSize.rows;
+			const numRowsToAllocate = (this.renderPosition.row + this.height()) - this.termSize.rows;
 
 			if (numRowsToAllocate > 0) {
 				writeString += ansiEscapes.cursorTo(0, this.termSize.rows);
@@ -102,14 +95,12 @@ class TerminalJumper {
 			}
 		}
 
-
 		for (let division of this.divisions) {
 			const renderString = division._render(this.renderPosition);
 			writeString += renderString;
 		}
 
-		const bottomDivision = this._getBottomDivision();
-		writeString += this._getJumpToString(bottomDivision, 0, -1);
+		writeString += this._getJumpToString(this._bottomDivision, 0, -1);
 		writeString += ansiEscapes.cursorLeft;
 		writeString += ansiEscapes.cursorDown();
 		writeString += ansiEscapes.eraseDown;
@@ -132,7 +123,12 @@ class TerminalJumper {
 		division.scroll(scrollX, scrollY);
 
 		if (!options.noRender) {
-			division._render(this.renderPosition);
+			// possibly don't need to call this.render()
+			let renderString = division._render(this.renderPosition);
+			renderString += this._getJumpToString(this._bottomDivision, 0, -1);
+			renderString += ansiEscapes.cursorLeft;
+			renderString += ansiEscapes.cursorDown();
+			process.stdout.write(renderString);
 		}
 	}
 
@@ -156,6 +152,20 @@ class TerminalJumper {
 		}
 
 		this._dirty = true;
+	}
+
+	/**
+	 * A hodge-podge of various attempts at performance optimization.
+	 */
+	_calculateDimensions() {
+		// get the total height
+		const heights = this.divisions.map(division => {
+			return division.height(this.termSize) + division.top;
+		});
+		this._height = Math.max(...heights);
+
+		// get the "bottom" division
+		this._bottomDivision = this._getBottomDivision();
 	}
 
 	_getTopDivision() {

@@ -5,12 +5,24 @@ const stripAnsi = require('strip-ansi');
 const sliceAnsi = require('slice-ansi');
 const TextBlock = require('./TextBlock');
 
+// TODO: make use of block.escapedText instead of stripAnsi()
+
 const DEFAULT_OPTIONS = {
+	/**
+	 * The id that TerminalJumper associates with this division.
+	 */
+	id: null,
+
 	/**
 	 * top, left, width are required. Setting height is optional. If not set, will
 	 * shrink to the height of the content inside.
 	 * All of these properties must be between 0 and 1. They are the percentages
-	 * of the terminal viewport.
+	 * of the terminal viewport. TODO: not this ^
+	 */
+
+	/**
+	 * @prop {number|string} - If the id of a division is given, will set the top
+	 * offset of this division to the bottom of the given division.
 	 */
 	top: null,
 	left: null,
@@ -28,8 +40,10 @@ const DEFAULT_OPTIONS = {
 	 */
 	overflowY: 'hidden',
 
+	/**
+	 * @propt {boolean} wrapOnWord - Wrap on word breaks.
+	 */
 	wrapOnWord: true
-	// id: null
 };
 
 class Division {
@@ -86,12 +100,9 @@ class Division {
 		}
 
 		if (this._dirty) {
-			this._allLines = [];
-
-			for (let id of this.blockIds) {
-				const blockLines = this.getBlock(id).getLines(this.width, this.options.overflowX, this.options.wrapOnWord);
-				this._allLines.push(...blockLines);
-			}
+			this._calculateDimensions();
+			this._dirty = false;
+			this._needsRender = true;
 		}
 
 		return this._allLines.length;
@@ -158,6 +169,8 @@ class Division {
 			renderString += line;
 			lineIncrement += 1;
 		}
+
+		this._needsRender = false;
 
 		return renderString;
 	}
