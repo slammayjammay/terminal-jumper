@@ -39,8 +39,6 @@ class TerminalJumper {
 		this.termSize = { rows: null, columns: null };
 
 		process.stdout.on('resize', this._onResizeDebounced);
-
-		this._resize();
 	}
 
 	getDivision(id) {
@@ -68,23 +66,36 @@ class TerminalJumper {
 		return division.block(string, options);
 	}
 
-	height() {
-		if (this._dirty) {
-			this._calculateDimensions();
+	height(division) {
+		if (typeof division === 'string') {
+			division = this.getDivision(division);
 		}
 
-		return this._height;
+		if (this._dirty) {
+			this._calculateDimensions();
+			this._dirty = false;
+		}
+
+		if (division) {
+			return this.getDivision(divisionId).height();
+		} else {
+			return this._height;
+		}
 	}
 
 	render() {
 		let writeString = '';
 
 		if (!this._isInitiallyRendered) {
+			this._resize();
 			this.renderPosition = getCursorPosition.sync();
 			this._isInitiallyRendered = true;
 		}
 
 		if (this._dirty) {
+			this._calculateDimensions();
+			this._dirty = false;
+
 			const numRowsToAllocate = (this.renderPosition.row + this.height()) - this.termSize.rows;
 
 			if (numRowsToAllocate > 0) {
@@ -106,8 +117,6 @@ class TerminalJumper {
 		writeString += ansiEscapes.eraseDown;
 
 		process.stdout.write(writeString);
-
-		this._dirty = false;
 	}
 
 	jumpTo(target, col = 0, row = 0) {
@@ -151,7 +160,32 @@ class TerminalJumper {
 			division._resize(this.termSize);
 		}
 
+		for (let division of this.divisions) {
+			this._setDivisionPosition(division);
+		}
+
 		this._dirty = true;
+	}
+
+	_setDivisionPosition(division) {
+		division.top = this._calculateDivisionPositionForProp(division, 'top');
+		division.left = this._calculateDivisionPositionForProp(division, 'left');
+		division.width = ~~(division.options.width * this.termSize.columns);
+	}
+
+	/**
+	 * @param {Division} division - the division.
+	 * @param {string} position - "top|left".
+	 */
+	_calculateDivisionPositionForProp(division, position) {
+		if (typeof division.options[position] === 'number') {
+			const num = this.termSize[(position === 'left') ? 'columns' : 'rows'];
+			return ~~(division.options[position] * num);
+		} else if (typeof division.options[position] === 'string') {
+			const targetDivision = this.getDivision(division.options.top);
+			const targetTop = this._calculateDivisionPositionForProp(targetDivision, position);
+			return targetTop + targetDivision.height();
+		}
 	}
 
 	/**

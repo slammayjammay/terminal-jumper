@@ -34,9 +34,9 @@ const DEFAULT_OPTIONS = {
 
 	/**
 	 * Only takes effect if the "height" property is set.
-	 * @prop {string} overflowY - "hidden|scroll".
+	 * @prop {string} overflowY - "auto|scroll".
 	 */
-	overflowY: 'hidden',
+	overflowY: 'auto',
 
 	/**
 	 * @propt {boolean} wrapOnWord - Wrap on word breaks.
@@ -46,12 +46,6 @@ const DEFAULT_OPTIONS = {
 
 class Division {
 	constructor(options = {}) {
-		['top', 'left', 'width'].forEach(prop => {
-			if (typeof options[prop] !== 'number') {
-				throw new Error(`Options property "${prop}" must be a number between 0 and 1.`);
-			}
-		});
-
 		this.options = this._parseOptions(options);
 
 		this.top = this.left = this.width = null;
@@ -70,6 +64,10 @@ class Division {
 	}
 
 	_parseOptions(options) {
+		if (typeof options.width !== 'number') {
+			throw new Error(`Options property "width" must be a number between 0 and 1.`);
+		}
+
 		if (options.overflowY === 'scroll' && typeof options.height !== 'number') {
 			throw new Error('Must set division height when overflowY is "scroll".');
 		}
@@ -198,7 +196,7 @@ class Division {
 			if (this.options.overflowX === 'scroll') {
 				blockLines.forEach(line => {
 					const lineLength = stripAnsi(line).length;
-					if (lineLength - this.width> this._maxScrollX) {
+					if (lineLength - this.width > this._maxScrollX) {
 						this._maxScrollX = lineLength - this.width;
 					}
 				});
@@ -213,11 +211,6 @@ class Division {
 
 	_resize(terminalSize) {
 		this.termSize = terminalSize;
-
-		this.top = ~~(this.options.top * terminalSize.rows);
-		this.left = ~~(this.options.left * terminalSize.columns);
-		this.width = ~~(this.options.width * terminalSize.columns);
-
 		this._dirty = true;
 	}
 
