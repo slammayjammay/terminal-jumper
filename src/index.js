@@ -1,6 +1,17 @@
-const ansiEscapes = require('ansi-escapes')
-const getCursorPosition = require('@patrickkettner/get-cursor-position')
-const TextBlock = require('./text-block')
+const debounce = require('lodash.debounce');
+const termSize = require('term-size');
+const ansiEscapes = require('ansi-escapes');
+const getCursorPosition = require('@patrickkettner/get-cursor-position');
+const Division = require('./Division');
+const TextBlock = require('./TextBlock');
+
+const DEFAULT_OPTIONS = {
+	divisions: [{
+		top: 0,
+		left: 0,
+		width: 1
+	}]
+};
 
 /**
  * TerminalJumper. Helps jumping the cursor to different parts of outputted
@@ -8,228 +19,176 @@ const TextBlock = require('./text-block')
  * @class
  */
 class TerminalJumper {
-	constructor() {
-		this.numBlocks = 0
-		this.blocks = {}
-		this.startPos = null
+	constructor(options = {}) {
+		this.options = Object.assign({}, DEFAULT_OPTIONS, options);
+
+		this._onResizeDebounced = debounce(this._onResizeDebounced.bind(this), 200);
+
+		this._isInitiallyRendered = false;
+		this._dirty = true;
+		this._uniqueIdCounter = 0;
+
+		this.divisionsHash = {};
+		this.divisions = this.options.divisions.map(options => {
+			const id = options.id || `division-${this._uniqueIdCounter++}`;
+			const division = new Division(options);
+			this.divisionsHash[id] = division;
+			return division;
+		});
+
+		this.termSize = { rows: null, columns: null };
+
+		process.stdout.on('resize', this._onResizeDebounced);
+
+		this._resize();
 	}
 
-	/**
-	 * Gets a saved block of text.
-	 *
-	 * @param {string} id - The given id.
-	 * @return {TextBlock}
-	 */
-	find(id) {
-		return this.blocks[id]
-	}
+	getDivision(id) {
+		const division =  this.divisionsHash[id];
 
-	/**
-	 * Removes a single or multiple blocks of text.
-	 *
-	 * @param {string|TextBlock|array} block - The id, array of id's, text block, or array of text blocks to remove.
-	 */
-	remove(block) {
-		if (typeof block === 'string') {
-			delete this.blocks[block]
-		} else if (block instanceof Array) {
-			for (let id of block) {
-				if (typeof id === 'string') {
-					let id = Object.keys(this.blocks).find(id => this.blocks[id] === block)
-				}
-				delete this.blocks[id]
-			}
-		} else if (typeof block === 'object') {
-			let id = Object.keys(this.blocks).find(id => this.blocks[id] === block)
-			delete this.blocks[id]
+		if (!division) {
+			throw new Error(`Could not find division "${divisionId}".`);
 		}
+
+		return division;
 	}
 
-	findAllMatching(regex) {
-		let blocks = []
-		let ids = Object.keys(this.blocks)
-
-		for (let id of ids) {
-			if (regex.test(id)) {
-				blocks.push(this.blocks[id])
+	block(string, division, options = {}) {
+		if (!division) {
+			division = this.divisions[0];
+		} else if (typeof division === 'string') {
+			division = this.divisionsHash[division];
+			if (!division) {
+				throw new Error(`No division found with id "${divisionId}"`);
 			}
 		}
 
-		return blocks
+		this._dirty = true;
+
+		return division.block(string, options);
 	}
 
-	removeAllMatching(regex) {
-		this.findAllMatching(regex).forEach(block => this.remove(block));
-	}
-
-	/**
-	 * Saves a block of text to render by an id.
-	 *
-	 * @param {string} textString - The text to output.
-	 * @param {string} [id] - The id to save this block to.
-	 * @return {TextBlock}
-	 */
-	block(textString, id) {
-		if (typeof id === 'undefined') {
-			id = this._generateUniqueSectionId()
-		}
-
-		let block = new TextBlock(textString)
-		this.blocks[id] = block
-		this.numBlocks += 1
-
-		return block
-	}
-
-	/**
-	 * Creates a space between text blocks by simply creating an empty one.
-	 */
-	break() {
-		this.block('')
-	}
-
-	/**
-	 * Gets the first text block.
-	 *
-	 * @return {TextBlock}
-	 */
-	firstBlock() {
-		let firstId = Object.keys(this.blocks)[0]
-		return this.blocks[firstId]
-	}
-
-	/**
-	 * Gets the last text block.
-	 *
-	 * @return {TextBlock}
-	 */
-	lastBlock() {
-		let lastId = Object.keys(this.blocks)[this.numBlocks - 1]
-		return this.blocks[lastId]
-	}
-
-	/**
-	 * Gets the total height of all text blocks.
-	 *
-	 * @return {number}
-	 */
 	height() {
-		let totalHeight = 0
-		for (let block of Object.keys(this.blocks).map(id => this.blocks[id])) {
-			totalHeight += block.height()
+		if (this._dirty) {
+			const heights = this.divisions.map(division => {
+				const height = division.height(this.termSize);
+
+				return height + division.top;
+			});
+
+			this._height = Math.max(...heights);
 		}
-		return totalHeight
+
+		return this._height;
 	}
 
-	/**
-	 * Renders all blocks.
-	 */
 	render() {
-		this.jumpTo(this.firstBlock() || this.topOfText);
+		let writeString = '';
 
-		let allBlocks = Object.keys(this.blocks).map(id => this.blocks[id])
-
-		let startPos = getCursorPosition.sync()
-		let totalHeight = process.stdout.rows
-		let scrollAmount = (startPos.row + this.height()) - totalHeight
-
-		if (scrollAmount > 0) {
-			process.stdout.write(ansiEscapes.cursorTo(0, process.stdout.rows));
-			console.log(new Array(scrollAmount).join('\n'));
-			process.stdout.write(ansiEscapes.cursorUp(this.height()));
+		if (!this._isInitiallyRendered) {
+			this.renderPosition = getCursorPosition.sync();
+			this._isInitiallyRendered = true;
 		}
 
-		allBlocks.forEach(block => block.render());
-		process.stdout.write(ansiEscapes.eraseDown);
+		if (this._dirty) {
+			const totalHeight = this.height();
+			const numRowsToAllocate = (this.renderPosition.row + totalHeight) - this.termSize.rows;
 
-		this.topOfText = this.firstBlock()
-	}
+			if (numRowsToAllocate > 0) {
+				writeString += ansiEscapes.cursorTo(0, this.termSize.rows);
+				writeString += new Array(numRowsToAllocate + 1).join('\n');
 
-	/**
-	 * Erases all output starting from a given block.
-	 * @param {Textblock|string} block - The block to start erasing from (inclusively).
-	 */
-	erase(block) {
-		if (typeof block === 'undefined') {
-			block = this.firstBlock() || this.topOfText
-		} else if (typeof block === 'string') {
-			block = this.find(block)
-		}
-
-		this.jumpTo(block)
-		process.stdout.write(ansiEscapes.eraseDown)
-	}
-
-	/**
-	 * Jumps the cursor to a given section. By default the first row and column.
-	 *
-	 * @param {string|TextBlock} targetBlock - The block object or id we want to jump to.
-	 * @param {integer} col - The col in this block we want to jump to.
-	 * @param {integer} row - The row in this block we want to jump to.
-	 * @return {TextBlock}
-	 */
-	jumpTo(targetBlock, col = 0, row = 0) {
-		if (typeof targetBlock === 'string') {
-			targetBlock = this.blocks[targetBlock]
-			if (!targetBlock) {
-				throw new Error('Not a section or valid section ID.')
+				this.renderPosition.row -= numRowsToAllocate;
 			}
 		}
 
-		// ick -- only jump to the block if it has a position (if it's been printed)
-		if (!targetBlock.position) {
-			return
+
+		for (let division of this.divisions) {
+			const renderString = division._render(this.renderPosition);
+			writeString += renderString;
 		}
 
-		let x = targetBlock.position.col - 1
-		let y = targetBlock.position.row - 1
-		process.stdout.write(ansiEscapes.cursorTo(x, y))
+		const bottomDivision = this._getBottomDivision();
+		writeString += this._getJumpToString(bottomDivision, 0, -1);
+		writeString += ansiEscapes.cursorLeft;
+		writeString += ansiEscapes.cursorDown();
+		writeString += ansiEscapes.eraseDown;
 
-		targetBlock.jumpTo(col, row)
+		process.stdout.write(writeString);
 
-		return targetBlock
+		this._dirty = false;
 	}
 
-	/**
-	 * Moves the cursor to a global position.
-	 *
-	 * @param {object} col - An object in the form of { col, row }.
-	 * @param {integer} col - An integer of the target column.
-	 * @param {integer} row - An integer of the target row.
-	 * @return {null}
-	 */
-	cursorTo(col = 0, row = 0) {
-		let x
-		let y
+	jumpTo(target, col = 0, row = 0) {
+		const renderString = this._getJumpToString(target, col, row);
+		process.stdout.write(renderString);
+	}
 
-		if (typeof col === 'object') {
-			x = col.col
-			y = col.row
-		} else if (typeof col === 'number') {
-			x = col
-			y = row
+	scroll(division, scrollX, scrollY, options = {}) {
+		if (typeof division === 'string') {
+			division = this.getDivision(division);
 		}
-		process.stdout.write(ansiEscapes.cursorTo(x - 1, y - 1))
+
+		division.scroll(scrollX, scrollY);
+
+		// if (!options.noRender) {
+		// 	division._render(this.renderPosition);
+		// }
 	}
 
-	/**
-	 * Erases all text and deletes all text blocks.
-	 */
-	reset() {
-		this.erase()
-		this.renderedInitial = false
-		this.blocks = {}
-		this.numBlocks = 0
+	scrollX(division, scrollX, options) {
+		this.scroll(division, scrollX, null, options);
 	}
 
-	/**
-	 * Generates a unique id to save a block to.
-	 *
-	 * @return {string}
-	 */
-	_generateUniqueSectionId() {
-		return `block${this.numBlocks}`
+	scrollY(division, scrollY, options) {
+		this.scroll(division, null, scrollY, options);
+	}
+
+	_onResizeDebounced() {
+		this._resize();
+	}
+
+	_resize() {
+		this.termSize = termSize();
+
+		for (let division of this.divisions) {
+			division._resize(this.termSize);
+		}
+
+		this._dirty = true;
+	}
+
+	_getTopDivision() {
+		return this._divisions.sort((one, two) => one.top < two.top)[0];
+	}
+
+	_getBottomDivision() {
+		return this.divisions.sort((one, two) => {
+			const onePos = one.top + one.height();
+			const twoPos = two.top + two.height();
+			return twoPos > onePos;
+		})[0];
+	}
+
+	_getJumpToString(target, col, row) {
+		if (!this._isInitiallyRendered) {
+			return '';
+		}
+
+		let division = target;
+		let blockId;
+
+		if (typeof target === 'string') {
+			[division, blockId] = target.split('.');
+
+			division = this.getDivision(division);
+		}
+
+		const pos = division._getJumpPos(blockId, col, row);
+		const [x, y] = [this.renderPosition.col + pos.col - 1, this.renderPosition.row + pos.row - 1];
+
+		return ansiEscapes.cursorTo(x, y);
 	}
 }
 
-module.exports = new TerminalJumper()
+module.exports = TerminalJumper

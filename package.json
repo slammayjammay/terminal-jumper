@@ -2,7 +2,7 @@
   "name": "terminal-jumper",
   "version": "0.4.5",
   "description": "Easily move the cursor around text blocks in terminal applications.",
-  "main": "lib/index.js",
+  "main": "src/index.js",
   "scripts": {
     "build": "babel --presets=es2015 src -d lib",
     "docs": "jsdoc -r src/ -d docs/ && open docs/index.js.html",
@@ -23,7 +23,11 @@
   "dependencies": {
     "@patrickkettner/get-cursor-position": "^1.0.4",
     "ansi-escapes": "^1.4.0",
-    "strip-ansi": "^3.0.1"
+    "lodash.debounce": "^4.0.8",
+    "slice-ansi": "^1.0.0",
+    "strip-ansi": "^3.0.1",
+    "term-size": "^1.2.0",
+    "wrap-ansi": "^3.0.1"
   },
   "devDependencies": {
     "babel-cli": "^6.18.0",
