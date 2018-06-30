@@ -31,6 +31,12 @@ class TextBlock {
 		text = text.replace(/\t/g, TAB_FAKER);
 		this.text += text;
 
+		this.escapedText = stripAnsi(this.text);
+
+		if (this.division) {
+			this.division._setDirty();
+		}
+
 		return this;
 	}
 
@@ -47,16 +53,22 @@ class TextBlock {
 		return this;
 	}
 
-	height(containerWidth, overflowX, wrapOnWord) {
-		return this.getLines(containerWidth, overflowX, wrapOnWord).length;
+	height() {
+		return this.getLines().length;
+	}
+
+	remove() {
+		if (this.division) {
+			this.division.remove(this);
+		}
 	}
 
 	/**
 	 * @param {string} text - A string with no newlines.
 	 */
-	getWrappedLine(text, containerWidth, wrapOnWord) {
-		if (wrapOnWord) {
-			return wrapAnsi(text, containerWidth);
+	getWrappedLine(text) {
+		if (this.division.options.wrapOnWord) {
+			return wrapAnsi(text, this.division.width, { trim: false });
 		}
 
 		const textLength = stripAnsi(text).length;
@@ -66,39 +78,34 @@ class TextBlock {
 		let remainder = text;
 
 		do {
-			lines.push(sliceAnsi(remainder, 0, containerWidth));
+			lines.push(sliceAnsi(remainder, 0, this.division.width));
 
-			startIdx += containerWidth;
-			remainder = sliceAnsi(remainder, containerWidth);
+			startIdx += this.division.width;
+			remainder = sliceAnsi(remainder, this.division.width);
 		} while (startIdx <= textLength);
 
 		return lines.join('\n');
 	}
 
-	/**
-	 * @param {number} containerWidth - width of container (division) in rows.
-	 * @param {string} overflowX - overflowX of container ("wrap|hidden|scroll").
-	 * @param {boolean} wrapOnWord - if overflowX is "wrap", whether to break on words.
-	 */
-	getLines(containerWidth, overflowX, wrapOnWord) {
-		if (overflowX === 'wrap') {
+	getLines() {
+		if (this.division.options.overflowX === 'wrap') {
 			const lines = [];
 
 			for (let line of this.text.split('\n')) {
-				const wrapped = this.getWrappedLine(line, containerWidth, wrapOnWord);
+				const wrapped = this.getWrappedLine(line);
 				lines.push(...wrapped.split('\n'));
 			}
 
 			return lines;
 		}
 
-		if (overflowX === 'scroll') {
+		if (this.division.options.overflowX === 'scroll') {
 			return this.text.split('\n');
 		}
 	}
 
-	getWidthOnRow(row, containerWidth, overflowX, wrapOnWord) {
-		const lines = this.getLines(containerWidth, overflowX, wrapOnWord);
+	getWidthOnRow(row) {
+		const lines = this.getLines();
 
 		// row position is outside of this box
 		if (Math.abs(row) >= lines.length) {
