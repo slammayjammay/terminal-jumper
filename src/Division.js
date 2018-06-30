@@ -380,7 +380,7 @@ class Division {
 
 		// if division fills up viewport height, convert to scroll
 		if (this.top() + height > this.termSize.rows - 1) {
-			height = viewportHeight - 1 - this.top();
+			height = this.termSize.rows - 1 - this.top();
 		}
 
 		return height;
