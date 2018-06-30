@@ -34,7 +34,7 @@ class TextBlock {
 		this.escapedText = stripAnsi(this.text);
 
 		if (this.division) {
-			this.division._setDirty();
+			this.division._contentChange();
 		}
 
 		return this;
@@ -104,17 +104,22 @@ class TextBlock {
 		}
 	}
 
-	getWidthOnRow(row) {
+	getRow(row) {
 		const lines = this.getLines();
 
-		// row position is outside of this box
 		if (Math.abs(row) >= lines.length) {
-			return null;
-		} else if (row < 0) {
+			throw new Error(`Row position "${row}" is outside this block.`);
+		}
+
+		if (row < 0) {
 			row = lines.length + row;
 		}
 
-		return stripAnsi(lines[row]).length;
+		return lines[row];
+	}
+
+	getWidthOnRow(row) {
+		return stripAnsi(this.getRow(row)).length;
 	}
 }
 

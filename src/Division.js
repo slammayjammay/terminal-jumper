@@ -71,7 +71,6 @@ class Division {
 
 		this.blockIds = [];
 		this.blockHash = {};
-		this._prevRenderLines = [];
 		this._blockPositions = {};
 		this._uniqueIdCounter = 0;
 
@@ -134,7 +133,7 @@ class Division {
 		delete this.blockHash[id];
 		delete this._blockPositions[id];
 
-		this._setDirty();
+		this._contentChange();
 	}
 
 	hasBlock(id) {
@@ -267,19 +266,7 @@ class Division {
 	 * Does not output any text. Instead returns the string to print.
 	 */
 	renderString() {
-		// if (!this._dirty && !this._needsRender) {
-		// 	return '';
-		// }
-
-		// if (this._dirty) {
-		// 	this._calculateDimensions();
-		// 	this._dirty = false;
-		// 	this._needsRender = true;
-		// }
-
 		let renderString = '';
-
-		renderString += this.eraseString();
 
 		// scrollX and scrollY
 		const linesToRender = this.allLines()
@@ -301,7 +288,6 @@ class Division {
 		}
 
 		this._needsRender = false;
-		this._prevRenderLines = linesToRender;
 
 		return renderString;
 	}
@@ -313,7 +299,7 @@ class Division {
 	eraseString() {
 		let writeString = '';
 
-		const blankLine = new Array(this._width).join(' ');
+		const blankLine = new Array(this.width()).join(' ');
 
 		const startLeft = this.renderPosition.col + this.left() - 1;
 		const startTop = this.renderPosition.row + this.top() - 1;
@@ -333,6 +319,8 @@ class Division {
 	/**
 	 * A hodge-podge of various attempts at performance optimization.
 	 *
+	 * @param {boolean} force - Force calculations.
+	 *
 	 * Steps:
 	 *   - calculates top
 	 *   - calculates left
@@ -343,14 +331,14 @@ class Division {
 	 *   - calculates maxScrollX (depends on `this._allLines` and "width")
 	 *   - calculates maxScrollY (depends on `this._allLines` and "height")
 	 */
-	_calculateDimensions() {
-		if (this._top === null) this._top = this._calculateTop();
-		if (this._left === null) this._left = this._calculateLeft();
-		if (this._width === null) this._width = this._calculateWidth();
-		if (this._allLines === null) this._populateLines();
-		if (this._height === null) this._height = this._calculateHeight();
-		if (this._maxScrollX === null) this._maxScrollX = this._calculateMaxScrollX();
-		if (this._maxScrollY === null) this._maxScrollY = this._calculateMaxScrollY();
+	_calculateDimensions(force) {
+		if (force || this._top === null) this._top = this._calculateTop();
+		if (force || this._left === null) this._left = this._calculateLeft();
+		if (force || this._width === null) this._width = this._calculateWidth();
+		if (force || this._allLines === null) this._populateLines();
+		if (force || this._height === null) this._height = this._calculateHeight();
+		if (force || this._maxScrollX === null) this._maxScrollX = this._calculateMaxScrollX();
+		if (force || this._maxScrollY === null) this._maxScrollY = this._calculateMaxScrollY();
 	}
 
 	_calculateTop() {
@@ -421,15 +409,10 @@ class Division {
 		return this._allLines.length - this.height();
 	}
 
-	_resetDimensions() {
-		this._top = this._left = this._width = this._height = null;
-		this._scrollX = this._scrollY = 0;
+	_contentChange() {
+		this._width = this._height = null;
 		this._maxScrollX = this._maxScrollY = null;
 		this._allLines = null;
-	}
-
-	_setDirty() {
-		this._resetDimensions();
 
 		if (this.jumper) {
 			this.jumper._setDirty(this);
@@ -440,11 +423,7 @@ class Division {
 		this.termSize = terminalSize;
 		this.renderPosition = renderPosition;
 
-		this._top = this._left = this._width = this._height = null;
-		this._maxScrollX = this._maxScrollY = null;
-		this._allLines = null;
-
-		this._calculateDimensions();
+		this._calculateDimensions(true);
 	}
 
 	jumpTo(block, col = 0, row = 0) {
@@ -453,12 +432,6 @@ class Division {
 	}
 
 	jumpToString(block, col = 0, row = 0) {
-		// if (!block) {
-		// 	const x = this.renderPosition.col + this.left();
-		// 	const y = this.renderPosition.row + this.top();
-		// 	return ansiEscapes.cursorTo(x, y);
-		// }
-
 		const blockGiven = (block !== undefined);
 
 		let blockId = null;
@@ -474,15 +447,7 @@ class Division {
 			}
 		}
 
-		const width = (() => {
-			if (!blockGiven) {
-				return this.width();
-			}
-
-			const blockWidth = block.getWidthOnRow(row);
-			return (typeof blockWidth === 'number') ? blockWidth : this.width();
-		})();
-
+		const width = blockGiven ? block.getWidthOnRow(row) : this.height();
 		const height = blockGiven ? block.height() : this.height();
 		const offsetTop = blockGiven ? this._blockPositions[blockId].row : this.top();
 
@@ -504,7 +469,7 @@ class Division {
 		this._blockPositions[id] = { row: null, col: null };
 		block.division = this;
 
-		this._setDirty();
+		this._contentChange();
 
 		return block;
 	}

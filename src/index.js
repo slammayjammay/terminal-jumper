@@ -202,18 +202,6 @@ class TerminalJumper {
 			this.renderPosition.row -= numRowsToAllocate;
 		}
 
-		// if (this._dirty) {
-		// 	this._calculateDimensions();
-
-		// 	const numRowsToAllocate = (this.renderPosition.row + this.height()) - this.termSize.rows;
-
-		// 	if (numRowsToAllocate > 0) {
-		// 		writeString += ansiEscapes.cursorTo(0, this.termSize.rows);
-		// 		writeString += new Array(numRowsToAllocate + 1).join('\n');
-		// 		this.renderPosition.row -= numRowsToAllocate;
-		// 	}
-		// }
-
 		for (let division of this.divisions) {
 			const renderString = division.renderString();
 			writeString += renderString;
@@ -233,10 +221,6 @@ class TerminalJumper {
 
 	eraseString() {
 		let writeString = '';
-
-		// const [x, y] = [this.renderPosition.col - 1, this.renderPosition.row - 1];
-		// writeString += ansiEscapes.cursorTo(x, y);
-		// writeString += ansiEscapes.eraseDown;
 
 		for (let division of this.divisions) {
 			writeString += division.eraseString();
@@ -307,7 +291,7 @@ class TerminalJumper {
 			const affectedDivisions = this._affectedDivisions[division.options.id];
 
 			if (affectedDivisions) {
-				affectedDivisions.forEach(division => division._resetDimensions());
+				affectedDivisions.forEach(division => division._calculateDimensions(true));
 			}
 		}
 	}
