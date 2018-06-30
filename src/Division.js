@@ -82,6 +82,10 @@ class Division {
 	}
 
 	_parseOptions(options) {
+		if (!options.id) {
+			throw new Error(`Options property "id" must be present.`);
+		}
+
 		if (typeof options.width !== 'number') {
 			throw new Error(`Options property "width" must be a number between 0 and 1.`);
 		}
@@ -428,7 +432,7 @@ class Division {
 		this._resetDimensions();
 
 		if (this.jumper) {
-			this.jumper._setDirty();
+			this.jumper._setDirty(this);
 		}
 	}
 

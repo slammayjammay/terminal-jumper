@@ -33,19 +33,45 @@ class TerminalJumper {
 		this.termSize = termSize();
 
 		this.divisionsHash = {};
-		this.divisions = this.options.divisions.map(options => {
-			const id = options.id || `division-${this._uniqueIdCounter++}`;
-			const division = new Division(options);
+		this.divisions = [];
 
-			division.jumper = this;
-			division.termSize = this.termSize;
+		this._affectedDivisions = {};
 
-			this.divisionsHash[id] = division;
-
-			return division;
-		});
+		this.options.divisions.forEach(options => this.addDivision(options));
 
 		process.stdout.on('resize', this._onResizeDebounced);
+	}
+
+	addDivision(options) {
+		const id = options.id || `division-${this._uniqueIdCounter++}`;
+		const division = new Division(options);
+
+		division.jumper = this;
+		division.termSize = this.termSize;
+
+		this.divisionsHash[id] = division;
+		this.divisions.push(division);
+
+		// does this division's position depend on another one?
+		const topDepends = typeof division.options.top === 'string';
+		const leftDepends = typeof division.options.left === 'string';
+		const alreadyInit = !this._affectedDivisions[division.options.top];
+
+		if ((topDepends || leftDepends) && alreadyInit) {
+			if (!this._affectedDivisions[division.options.top]) {
+				this._affectedDivisions[division.options.top] = [];
+			}
+		}
+
+		if (topDepends) {
+			this._affectedDivisions[division.options.top].push(division);
+		}
+
+		if (leftDepends) {
+			this._affectedDivisions[division.options.left].push(division);
+		}
+
+		return division;
 	}
 
 	getDivision(id) {
@@ -273,12 +299,16 @@ class TerminalJumper {
 		return division.scrollDown(amount);
 	}
 
-	_setDirty() {
+	_setDirty(division) {
 		this._height = this._topDivision = this._bottomDivision = null;
 		this._dirty = true;
 
-		for (let division of this.divisions) {
-			division._resetDimensions();
+		if (division) {
+			const affectedDivisions = this._affectedDivisions[division.options.id];
+
+			if (affectedDivisions) {
+				affectedDivisions.forEach(division => division._resetDimensions());
+			}
 		}
 	}
 
