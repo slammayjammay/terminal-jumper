@@ -35,7 +35,8 @@ class TerminalJumper {
 		this.divisionsHash = {};
 		this.divisions = [];
 
-		this._affectedDivisions = {};
+		this._renderTree = { children: [], depth: 0 };
+		this._renderNodes = {};
 
 		this.options.divisions.forEach(options => this.addDivision(options));
 
@@ -52,24 +53,7 @@ class TerminalJumper {
 		this.divisionsHash[id] = division;
 		this.divisions.push(division);
 
-		// does this division's position depend on another one?
-		const topDepends = typeof division.options.top === 'string';
-		const leftDepends = typeof division.options.left === 'string';
-		const alreadyInit = !this._affectedDivisions[division.options.top];
-
-		if ((topDepends || leftDepends) && alreadyInit) {
-			if (!this._affectedDivisions[division.options.top]) {
-				this._affectedDivisions[division.options.top] = [];
-			}
-		}
-
-		if (topDepends) {
-			this._affectedDivisions[division.options.top].push(division);
-		}
-
-		if (leftDepends) {
-			this._affectedDivisions[division.options.left].push(division);
-		}
+		this._addDivisionToRenderTree(division);
 
 		return division;
 	}
@@ -283,16 +267,63 @@ class TerminalJumper {
 		return division.scrollDown(amount);
 	}
 
+	_addDivisionToRenderTree(division) {
+		const node = { division, children: [], depth: 0 };
+
+		const parentNode = (() => {
+			const topDepends = typeof division.options.top === 'string';
+			const leftDepends = typeof division.options.left === 'string';
+
+			if (!topDepends && !leftDepends) {
+				return this._renderTree;
+			}
+
+			const topNode = this._renderNodes[division.options.top];
+			const topDepth = (topNode && topNode.depth) || -1;
+
+			const leftNode = this._renderNodes[division.options.left];
+			const leftDepth = (leftNode && leftNode.depth) || -1;
+
+			return topDepth > leftDepth ? topNode : leftNode;
+		})();
+
+		node.depth = parentNode.depth + 1;
+
+		parentNode.children.push(node);
+		this._renderNodes[division.options.id] = node;
+	}
+
+	/**
+	 * BFS.
+	 */
+	_traverseRenderNodes(startNode, callback) {
+		if (startNode instanceof Division) {
+			startNode = this._renderNodes[startNode.options.id];
+		} else if (typeof startNode === 'string') {
+			startNode = this._renderNodes[startNode];
+		}
+
+		let idx = 0;
+		const nodeList = [startNode];
+
+		while (idx < nodeList.length) {
+			nodeList.push(...nodeList[idx].children);
+			idx += 1;
+		}
+
+		for (let i = 0, l = nodeList.length; i < l; i++) {
+			callback(nodeList[i]);
+		}
+	}
+
 	_setDirty(division) {
 		this._height = this._topDivision = this._bottomDivision = null;
 		this._dirty = true;
 
 		if (division) {
-			const affectedDivisions = this._affectedDivisions[division.options.id];
-
-			if (affectedDivisions) {
-				affectedDivisions.forEach(division => division._calculateDimensions(true));
-			}
+			this._traverseRenderNodes(division.options.id, ({ division }) => {
+				division._calculateDimensions(true);
+			});
 		}
 	}
 
