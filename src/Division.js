@@ -73,11 +73,6 @@ class Division {
 		this.blockHash = {};
 		this._blockPositions = {};
 		this._uniqueIdCounter = 0;
-
-		// this._dirty indicates whether block recalculation needs to happen.
-		// because divisions can scroll, sometimes we'll need to render without
-		// recalculations -- this._needsRender.
-		this._dirty = this._needsRender = true;
 	}
 
 	_parseOptions(options) {
@@ -219,7 +214,6 @@ class Division {
 
 			if (scrollX !== this._scrollX) {
 				this._scrollX = scrollX;
-				this._needsRender = true;
 			}
 		}
 
@@ -228,7 +222,6 @@ class Division {
 
 			if (scrollY !== this._scrollY) {
 				this._scrollY = scrollY;
-				this._needsRender = true;
 			}
 		}
 	}
@@ -283,8 +276,6 @@ class Division {
 			renderString += line;
 			lineIncrement += 1;
 		}
-
-		this._needsRender = false;
 
 		return renderString;
 	}
@@ -406,20 +397,22 @@ class Division {
 	}
 
 	_setDirty() {
-		this._top = this._left = this._width = this._height = null;
-		this._maxScrollX = this._maxScrollY = null;
-		this._allLines = null;
+		this._resetDimensions();
 
 		if (this.jumper) {
 			this.jumper._setDirty(this);
 		}
 	}
 
+	_resetDimensions() {
+		this._top = this._left = this._width = this._height = null;
+		this._maxScrollX = this._maxScrollY = null;
+		this._allLines = null;
+	}
+
 	_resize(terminalSize, renderPosition) {
 		this.termSize = terminalSize;
 		this.renderPosition = renderPosition;
-
-		this._calculateDimensions(true);
 	}
 
 	jumpTo(block, col = 0, row = 0) {

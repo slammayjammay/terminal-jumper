@@ -2,6 +2,7 @@ const debounce = require('lodash.debounce');
 const termSize = require('term-size');
 const ansiEscapes = require('ansi-escapes');
 const getCursorPosition = require('@patrickkettner/get-cursor-position');
+const Tree = require('./Tree');
 const Division = require('./Division');
 const TextBlock = require('./TextBlock');
 
@@ -28,18 +29,14 @@ class TerminalJumper {
 
 		this._isInitiallyRendered = false;
 		this._uniqueIdCounter = 0;
-		this._dirtyNodes = [];
 		this._bottomDivision = this._topDivision = null;
 
 		this.termSize = termSize();
 
-		// TODO: Array lookup instead
 		this.divisionsHash = {};
 		this.divisions = [];
 
-		this._renderTree = { children: [], depth: 0, parent: null };
-		this._renderNodes = {};
-
+		this.tree = new Tree();
 		this.options.divisions.forEach(options => this.addDivision(options));
 
 		process.stdout.on('resize', this._onResizeDebounced);
@@ -56,8 +53,7 @@ class TerminalJumper {
 		this.divisionsHash[id] = division;
 		this.divisions.push(division);
 
-		this._addDivisionToRenderTree(division);
-		this._setDirty(division);
+		this.tree.addDivision(division);
 
 		return division;
 	}
@@ -80,14 +76,10 @@ class TerminalJumper {
 			division = this.getDivision(division);
 		}
 
-		const node = this._renderNodes[division.options.id];
-		node.parent.children.splice(node.parent.children.indexOf(node), 1);
-
 		delete this.divisionsHash[division.options.id];
-		delete this._renderNodes[division.options.id];
-
 		this.divisions.splice(this.divisions.indexOf(division), 1);
-		this._dirtyNodes.splice(this._dirtyNodes.indexOf(node), 1);
+
+		this.tree.removeDivision(division);
 	}
 
 	reset() {
@@ -157,19 +149,6 @@ class TerminalJumper {
 		return this.getDivision(divisionId).getBlock(blockId);
 	}
 
-	remove(targets) {
-		let division, block;
-
-		if (typeof targets === 'string') {
-			const [divisionId, block] = targets.split('.');
-			division = this.getDivision(divisionId);
-		} else if (targets instanceof TextBlock) {
-			[division, block] = [targets.division, targets];
-		}
-
-		return division.remove(block);
-	}
-
 	height(division) {
 		if (typeof division === 'string') {
 			return this.getDivision(divisionId).height();
@@ -207,8 +186,14 @@ class TerminalJumper {
 			this._resize();
 		}
 
-		if (this._dirtyNodes.length > 0) {
-			this._processDirtyNodes();
+		const dirtyNodes = this.tree.dirtyNodes();
+		const needsRenderNodes = this.tree.needsRenderNodes();
+
+		this.tree.resetDirtyNodes();
+		this.tree.resetNeedsRenderNodes();
+
+		for (let { division } of dirtyNodes) {
+			division._calculateDimensions(true);
 		}
 
 		const numRowsToAllocate = this.renderPosition.row + this.height() - this.termSize.rows;
@@ -219,9 +204,8 @@ class TerminalJumper {
 			this.renderPosition.row -= numRowsToAllocate;
 		}
 
-		for (let division of this.divisions) {
-			const renderString = division.renderString();
-			writeString += renderString;
+		for (let { division } of needsRenderNodes) {
+			writeString += division.renderString();
 		}
 
 		writeString += this.jumpToString(this.bottomDivision(), 0, -1);
@@ -241,6 +225,7 @@ class TerminalJumper {
 
 		for (let division of this.divisions) {
 			writeString += division.eraseString();
+			this.tree.setNeedsRender(division);
 		}
 
 		writeString += this.jumpToString(this.topDivision(), 0, 0);
@@ -302,82 +287,9 @@ class TerminalJumper {
 		return division.scrollDown(amount);
 	}
 
-	_addDivisionToRenderTree(division) {
-		const node = { division, children: [], depth: 0, parent: null };
-
-		const parentNode = (() => {
-			const topDepends = typeof division.options.top === 'string';
-			const leftDepends = typeof division.options.left === 'string';
-
-			if (!topDepends && !leftDepends) {
-				return this._renderTree;
-			}
-
-			const topNode = this._renderNodes[division.options.top];
-			const topDepth = (topNode && topNode.depth) || -1;
-
-			const leftNode = this._renderNodes[division.options.left];
-			const leftDepth = (leftNode && leftNode.depth) || -1;
-
-			return topDepth > leftDepth ? topNode : leftNode;
-		})();
-
-		node.depth = parentNode.depth + 1;
-		node.parent = parentNode;
-
-		parentNode.children.push(node);
-		this._renderNodes[division.options.id] = node;
-	}
-
-	/**
-	 * BFS.
-	 */
-	_traverseRenderNodes(startNode, callback) {
-		if (startNode instanceof Division) {
-			startNode = this._renderNodes[startNode.options.id];
-		} else if (typeof startNode === 'string') {
-			startNode = this._renderNodes[startNode];
-		}
-
-		let idx = 0;
-		const nodeList = (!startNode.parent) ? startNode.children.slice() : [startNode];
-
-		while (idx < nodeList.length) {
-			nodeList.push(...nodeList[idx].children);
-			idx += 1;
-		}
-
-		for (let i = 0, l = nodeList.length; i < l; i++) {
-			callback(nodeList[i]);
-		}
-	}
-
 	_setDirty(division) {
 		this._height = this._topDivision = this._bottomDivision = null;
-
-		let node = this._renderTree;
-		if (division) {
-			node = this._renderNodes[division.options.id];
-		}
-
-		if (this._dirtyNodes.indexOf(node) === -1) {
-			this._dirtyNodes.push(node);
-		}
-	}
-
-	_processDirtyNodes() {
-		const processedNodes = {};
-
-		this._dirtyNodes.splice(0).forEach(node => {
-			if (processedNodes[node.division.id]) {
-				return;
-			}
-
-			this._traverseRenderNodes(node, ({ division }) => {
-				processedNodes[division.options.id] = true;
-				division._calculateDimensions(true);
-			});
-		});
+		this.tree.setDirty(division);
 	}
 
 	_onResizeDebounced() {
@@ -399,7 +311,8 @@ class TerminalJumper {
 			division._resize(this.termSize, this.renderPosition);
 		}
 
-		this._calculateDimensions();
+		this._setDirty();
+		this.render();
 	}
 
 	_calculateDimensions() {
