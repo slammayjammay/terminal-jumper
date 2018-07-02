@@ -244,6 +244,8 @@ class TerminalJumper {
 			writeString += division.eraseString();
 		}
 
+		writeString += this.jumpToString(this.topDivision(), 0, 0);
+
 		return writeString;
 	}
 
@@ -353,7 +355,7 @@ class TerminalJumper {
 
 	_setDirty(division) {
 		this._height = this._topDivision = this._bottomDivision = null;
-		this._dirty = true; // TODO: set this as a node
+		this._dirty = true;
 
 		let node = this._renderTree;
 		if (division) {
@@ -412,14 +414,16 @@ class TerminalJumper {
 	}
 
 	_getTopDivision() {
-		return this.divisions.sort((one, two) => one.top() < two.top())[0];
+		return this.divisions.sort((one, two) => {
+			return one.top() <= two.top() ? -1 : 1;
+		})[0];
 	}
 
 	_getBottomDivision() {
 		return this.divisions.sort((one, two) => {
 			const onePos = one.top() + one.height();
 			const twoPos = two.top() + two.height();
-			return twoPos > onePos;
+			return twoPos > onePos ? 1 : -1;
 		})[0];
 	}
 }
