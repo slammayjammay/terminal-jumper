@@ -28,11 +28,12 @@ class TerminalJumper {
 
 		this._isInitiallyRendered = false;
 		this._uniqueIdCounter = 0;
-		this._dirty = true;
+		this._dirtyNodes = [];
 		this._bottomDivision = this._topDivision = null;
 
 		this.termSize = termSize();
 
+		// TODO: Array lookup instead
 		this.divisionsHash = {};
 		this.divisions = [];
 
@@ -46,8 +47,8 @@ class TerminalJumper {
 
 	addDivision(options) {
 		const id = options.id || `division-${this._uniqueIdCounter++}`;
-		const division = new Division(options);
 
+		const division = new Division(options);
 		division.jumper = this;
 		division.termSize = this.termSize;
 		division.renderPosition = this.renderPosition;
@@ -79,14 +80,14 @@ class TerminalJumper {
 			division = this.getDivision(division);
 		}
 
-		this._setDirty(division);
-
 		const node = this._renderNodes[division.options.id];
 		node.parent.children.splice(node.parent.children.indexOf(node), 1);
 
 		delete this.divisionsHash[division.options.id];
 		delete this._renderNodes[division.options.id];
+
 		this.divisions.splice(this.divisions.indexOf(division), 1);
+		this._dirtyNodes.splice(this._dirtyNodes.indexOf(node), 1);
 	}
 
 	reset() {
@@ -201,15 +202,13 @@ class TerminalJumper {
 		let writeString = '';
 
 		if (!this._isInitiallyRendered) {
+			this._isInitiallyRendered = true;
 			this.renderPosition = getCursorPosition.sync();
 			this._resize();
-			this._isInitiallyRendered = true;
 		}
 
-		if (this._dirty) {
-			this._resize();
-			this._dirty = false;
-			writeString += this.eraseString();
+		if (this._dirtyNodes.length > 0) {
+			this._processDirtyNodes();
 		}
 
 		const numRowsToAllocate = this.renderPosition.row + this.height() - this.termSize.rows;
@@ -355,15 +354,29 @@ class TerminalJumper {
 
 	_setDirty(division) {
 		this._height = this._topDivision = this._bottomDivision = null;
-		this._dirty = true;
 
 		let node = this._renderTree;
 		if (division) {
 			node = this._renderNodes[division.options.id];
 		}
 
-		this._traverseRenderNodes(node, ({ division }) => {
-			division._calculateDimensions(true);
+		if (this._dirtyNodes.indexOf(node) === -1) {
+			this._dirtyNodes.push(node);
+		}
+	}
+
+	_processDirtyNodes() {
+		const processedNodes = {};
+
+		this._dirtyNodes.splice(0).forEach(node => {
+			if (processedNodes[node.division.id]) {
+				return;
+			}
+
+			this._traverseRenderNodes(node, ({ division }) => {
+				processedNodes[division.options.id] = true;
+				division._calculateDimensions(true);
+			});
 		});
 	}
 
@@ -382,14 +395,11 @@ class TerminalJumper {
 			);
 		}
 
-		this._setDirty();
-
 		for (let division of this.divisions) {
 			division._resize(this.termSize, this.renderPosition);
 		}
 
 		this._calculateDimensions();
-		this._dirty = false;
 	}
 
 	_calculateDimensions() {
