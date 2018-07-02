@@ -447,7 +447,7 @@ class Division {
 			}
 		}
 
-		const width = blockGiven ? block.getWidthOnRow(row) : this.height();
+		const width = blockGiven ? block.getWidthOnRow(row) : this.width();
 		const height = blockGiven ? block.height() : this.height();
 		const offsetTop = blockGiven ? this._blockPositions[blockId].row : this.top();
 
