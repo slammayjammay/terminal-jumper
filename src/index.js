@@ -7,6 +7,7 @@ const TextBlock = require('./TextBlock');
 
 const DEFAULT_OPTIONS = {
 	divisions: [{
+		id: 'default-division',
 		top: 0,
 		left: 0,
 		width: 1
@@ -35,7 +36,7 @@ class TerminalJumper {
 		this.divisionsHash = {};
 		this.divisions = [];
 
-		this._renderTree = { children: [], depth: 0 };
+		this._renderTree = { children: [], depth: 0, parent: null };
 		this._renderNodes = {};
 
 		this.options.divisions.forEach(options => this.addDivision(options));
@@ -49,11 +50,13 @@ class TerminalJumper {
 
 		division.jumper = this;
 		division.termSize = this.termSize;
+		division.renderPosition = this.renderPosition;
 
 		this.divisionsHash[id] = division;
 		this.divisions.push(division);
 
 		this._addDivisionToRenderTree(division);
+		this._setDirty(division);
 
 		return division;
 	}
@@ -66,6 +69,29 @@ class TerminalJumper {
 		}
 
 		return division;
+	}
+
+	removeDivision(division) {
+		if (Array.isArray(division)) {
+			division.forEach(division => this.removeDivision(division));
+			return;
+		} else if (typeof division === 'string') {
+			division = this.getDivision(division);
+		}
+
+		this._setDirty(division);
+
+		const node = this._renderNodes[division.options.id];
+		node.parent.children.splice(node.parent.children.indexOf(node), 1);
+
+		delete this.divisionsHash[division.options.id];
+		delete this._renderNodes[division.options.id];
+		this.divisions.splice(this.divisions.indexOf(division), 1);
+	}
+
+	reset() {
+		this.removeDivision(this.divisions.slice());
+		this.addDivision(DEFAULT_OPTIONS.divisions[0]);
 	}
 
 	topDivision() {
@@ -85,13 +111,21 @@ class TerminalJumper {
 	}
 
 	addBlock(targets, text) {
-		const [divisionId, blockId] = targets.split('.');
+		let division, blockId;
 
-		if (!divisionId) {
-			throw new Error('Division id must be specified.');
+		if (!targets) {
+			if (this.divisions.length > 1) {
+				throw new Error('Division id must be specified.');
+			} else {
+				division = this.divisions[0];
+			}
+		} else if (typeof targets === 'string') {
+			const ids = targets.split('.');
+			division = this.getDivision(ids[0]);
+			blockId = ids[1];
 		}
 
-		return this.getDivision(divisionId).addBlock(text, blockId);
+		return division.addBlock(text, blockId);
 	}
 
 	hasBlock(targets) {
@@ -268,7 +302,7 @@ class TerminalJumper {
 	}
 
 	_addDivisionToRenderTree(division) {
-		const node = { division, children: [], depth: 0 };
+		const node = { division, children: [], depth: 0, parent: null };
 
 		const parentNode = (() => {
 			const topDepends = typeof division.options.top === 'string';
@@ -288,6 +322,7 @@ class TerminalJumper {
 		})();
 
 		node.depth = parentNode.depth + 1;
+		node.parent = parentNode;
 
 		parentNode.children.push(node);
 		this._renderNodes[division.options.id] = node;
@@ -304,7 +339,7 @@ class TerminalJumper {
 		}
 
 		let idx = 0;
-		const nodeList = [startNode];
+		const nodeList = (!startNode.parent) ? startNode.children.slice() : [startNode];
 
 		while (idx < nodeList.length) {
 			nodeList.push(...nodeList[idx].children);
@@ -318,13 +353,16 @@ class TerminalJumper {
 
 	_setDirty(division) {
 		this._height = this._topDivision = this._bottomDivision = null;
-		this._dirty = true;
+		this._dirty = true; // TODO: set this as a node
 
+		let node = this._renderTree;
 		if (division) {
-			this._traverseRenderNodes(division.options.id, ({ division }) => {
-				division._calculateDimensions(true);
-			});
+			node = this._renderNodes[division.options.id];
 		}
+
+		this._traverseRenderNodes(node, ({ division }) => {
+			division._calculateDimensions(true);
+		});
 	}
 
 	_onResizeDebounced() {
