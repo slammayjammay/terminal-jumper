@@ -34,7 +34,7 @@ class TextBlock {
 		this.escapedText = stripAnsi(this.text);
 
 		if (this.division) {
-			this.division._contentChange();
+			this.division._setDirty();
 		}
 
 		return this;
@@ -64,11 +64,12 @@ class TextBlock {
 	}
 
 	/**
+	 * Assumes `this.division.options.overflowX === 'wrap'`.
 	 * @param {string} text - A string with no newlines.
 	 */
 	getWrappedLine(text) {
 		if (this.division.options.wrapOnWord) {
-			return wrapAnsi(text, this.division.width, { trim: false });
+			return wrapAnsi(text, this.division.width(), { trim: false });
 		}
 
 		const textLength = stripAnsi(text).length;
@@ -78,10 +79,10 @@ class TextBlock {
 		let remainder = text;
 
 		do {
-			lines.push(sliceAnsi(remainder, 0, this.division.width));
+			lines.push(sliceAnsi(remainder, 0, this.division.width()));
 
-			startIdx += this.division.width;
-			remainder = sliceAnsi(remainder, this.division.width);
+			startIdx += this.division.width();
+			remainder = sliceAnsi(remainder, this.division.width());
 		} while (startIdx <= textLength);
 
 		return lines.join('\n');
