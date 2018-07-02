@@ -133,7 +133,7 @@ class Division {
 		delete this.blockHash[id];
 		delete this._blockPositions[id];
 
-		this._contentChange();
+		this._setDirty();
 	}
 
 	hasBlock(id) {
@@ -262,9 +262,6 @@ class Division {
 		process.stdout.write(this.renderString());
 	}
 
-	/**
-	 * Does not output any text. Instead returns the string to print.
-	 */
 	renderString() {
 		let renderString = '';
 
@@ -398,19 +395,18 @@ class Division {
 
 	_calculateMaxScrollX() {
 		const lineLengths = this._allLines.map(line => {
-			return stripAnsi(line).length;
+			return stripAnsi(line).length - this.width();
 		});
 
-		const longestLine = Math.max(...lineLengths);
-		return longestLine - this.width();
+		return Math.max(...lineLengths, 0);
 	}
 
 	_calculateMaxScrollY() {
 		return this._allLines.length - this.height();
 	}
 
-	_contentChange() {
-		this._width = this._height = null;
+	_setDirty() {
+		this._top = this._left = this._width = this._height = null;
 		this._maxScrollX = this._maxScrollY = null;
 		this._allLines = null;
 
@@ -469,7 +465,7 @@ class Division {
 		this._blockPositions[id] = { row: null, col: null };
 		block.division = this;
 
-		this._contentChange();
+		this._setDirty();
 
 		return block;
 	}
