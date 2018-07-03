@@ -304,6 +304,53 @@ class Division {
 		return writeString;
 	}
 
+	jumpTo(block, col = 0, row = 0) {
+		process.stdout.write(this.jumpToString(block, col, row));
+		return this;
+	}
+
+	jumpToString(block, col = 0, row = 0) {
+		const blockGiven = (block !== undefined);
+
+		let blockId = null;
+
+		if (blockGiven) {
+			if (typeof block === 'string') {
+				blockId = block;
+				block = this.getBlock(block);
+			} else {
+				blockId = Object.keys(this.blockHash).find(blockId => {
+					return this.blockHash[blockId] === block;
+				});
+			}
+		}
+
+		const width = blockGiven ? block.getWidthOnRow(row) : this.width();
+		const height = blockGiven ? block.height() : this.height();
+		const offsetTop = blockGiven ? this._blockPositions[blockId].row : this.top();
+
+		const startX = (col >= 0) ? this.left() : this.left() + width + 1;
+		const startY = (row >= 0) ? offsetTop : offsetTop + height;
+
+		const x = this.renderPosition.col - 1 + startX + col;
+		const y = this.renderPosition.row - 1 + startY + row;
+
+		return ansiEscapes.cursorTo(x, y);
+	}
+
+	destroy() {
+		for (let id of this.blockIds) {
+			this.blockHash[id].destroy();
+		}
+
+		this.options = null;
+		this._allLines = null;
+		this.blockIds = this.blockHash = this._blockPositions = null;
+
+		this.jumper = null;
+		this.termSize = this.renderPositions = null;
+	}
+
 	/**
 	 * A hodge-podge of various attempts at performance optimization.
 	 *
@@ -413,40 +460,6 @@ class Division {
 	_resize(terminalSize, renderPosition) {
 		this.termSize = terminalSize;
 		this.renderPosition = renderPosition;
-	}
-
-	jumpTo(block, col = 0, row = 0) {
-		process.stdout.write(this.jumpToString(block, col, row));
-		return this;
-	}
-
-	jumpToString(block, col = 0, row = 0) {
-		const blockGiven = (block !== undefined);
-
-		let blockId = null;
-
-		if (blockGiven) {
-			if (typeof block === 'string') {
-				blockId = block;
-				block = this.getBlock(block);
-			} else {
-				blockId = Object.keys(this.blockHash).find(blockId => {
-					return this.blockHash[blockId] === block;
-				});
-			}
-		}
-
-		const width = blockGiven ? block.getWidthOnRow(row) : this.width();
-		const height = blockGiven ? block.height() : this.height();
-		const offsetTop = blockGiven ? this._blockPositions[blockId].row : this.top();
-
-		const startX = (col >= 0) ? this.left() : this.left() + width + 1;
-		const startY = (row >= 0) ? offsetTop : offsetTop + height;
-
-		const x = this.renderPosition.col - 1 + startX + col;
-		const y = this.renderPosition.row - 1 + startY + row;
-
-		return ansiEscapes.cursorTo(x, y);
 	}
 
 	/**

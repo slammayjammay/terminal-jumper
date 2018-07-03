@@ -287,6 +287,20 @@ class TerminalJumper {
 		return division.scrollDown(amount);
 	}
 
+	destroy() {
+		this.tree.destroy();
+
+		for (let division of this.divisions) {
+			division.destroy();
+		}
+
+		this.divisions = this.divisionsHash = null;
+		this._topDivision = this._bottomDivision = null;
+		this.termSize = this.renderPosition = null;
+
+		process.stdout.removeListener('resize', this._onResizeDebounced);
+	}
+
 	_setDirty(division) {
 		this._height = this._topDivision = this._bottomDivision = null;
 		this.tree.setDirty(division);

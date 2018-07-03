@@ -122,6 +122,10 @@ class TextBlock {
 	getWidthOnRow(row) {
 		return stripAnsi(this.getRow(row)).length;
 	}
+
+	destroy() {
+		this.division = null;
+	}
 }
 
 module.exports = TextBlock

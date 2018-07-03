@@ -107,6 +107,10 @@ class Tree {
 			callback(nodeList[i]);
 		}
 	}
+
+	destroy() {
+		this.tree = this.nodes = this._dirtyNodes = this._needsRenderNodes = null;
+	}
 }
 
 module.exports = Tree;
