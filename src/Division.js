@@ -482,7 +482,7 @@ class Division {
 
 		for (let id of this.blockIds) {
 			const block = this.getBlock(id);
-			this._allLines.push(...block.getLines());
+			this._allLines.push(...block.lines());
 
 			this._blockPositions[id].row = posYInc;
 			this._blockPositions[id].col = 0;

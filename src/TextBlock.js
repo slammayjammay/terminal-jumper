@@ -18,6 +18,8 @@ class TextBlock {
 		this.text = '';
 		this.escapedText = '';
 
+		this._height = this._lines = null;
+
 		this.append(text);
 	}
 
@@ -37,6 +39,8 @@ class TextBlock {
 			this.division._setDirty();
 		}
 
+		this._height = this._lines = null;
+
 		return this;
 	}
 
@@ -53,15 +57,28 @@ class TextBlock {
 		return this;
 	}
 
-	// TODO: cache
 	height() {
-		return this.getLines().length;
+		if (this._height === null) {
+			this._height = this._calculateHeight();
+		}
+
+		return this._height;
+	}
+
+	lines() {
+		if (this._lines === null) {
+			this._lines = this._getLines();
+		}
+
+		return this._lines;
 	}
 
 	remove() {
 		if (this.division) {
 			this.division.remove(this);
 		}
+
+		this._height = this._lines = null;
 	}
 
 	/**
@@ -89,25 +106,8 @@ class TextBlock {
 		return lines.join('\n');
 	}
 
-	getLines() {
-		if (this.division.options.overflowX === 'wrap') {
-			const lines = [];
-
-			for (let line of this.text.split('\n')) {
-				const wrapped = this.getWrappedLine(line);
-				lines.push(...wrapped.split('\n'));
-			}
-
-			return lines;
-		}
-
-		if (this.division.options.overflowX === 'scroll') {
-			return this.text.split('\n');
-		}
-	}
-
 	getRow(row) {
-		const lines = this.getLines();
+		const lines = this._getLines();
 
 		if (Math.abs(row) >= lines.length) {
 			throw new Error(`Row position "${row}" is outside this block.`);
@@ -126,6 +126,27 @@ class TextBlock {
 
 	destroy() {
 		this.division = null;
+	}
+
+	_calculateHeight() {
+		return this.lines().length;
+	}
+
+	_getLines() {
+		if (this.division.options.overflowX === 'wrap') {
+			const lines = [];
+
+			for (let line of this.text.split('\n')) {
+				const wrapped = this.getWrappedLine(line);
+				lines.push(...wrapped.split('\n'));
+			}
+
+			return lines;
+		}
+
+		if (this.division.options.overflowX === 'scroll') {
+			return this.text.split('\n');
+		}
 	}
 }
 
