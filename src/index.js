@@ -465,12 +465,11 @@ class TerminalJumper {
 
 		const debugDivision = this.getDivision(this._debugDivisionId);
 
-		debugDivision.addBlock(`${chalk.bold.red('re-calculated & re-rendered')}`, 'legend-red');
-		debugDivision.addBlock(`${chalk.bold.yellow('re-rendered')}`, 'legend-yellow');
-		debugDivision.addBlock(`${chalk.bold.white('no change')}`, 'legend-white');
+		debugDivision.addBlock(`${chalk.bold.red('● re-calculated & re-rendered')}`, 'legend-red');
+		debugDivision.addBlock(`${chalk.bold.yellow('● re-rendered')}`, 'legend-yellow');
+		debugDivision.addBlock(`${chalk.bold.white('● no change')}`, 'legend-white');
 		debugDivision.addBlock(new Array(debugDivision.width()).join('='), 'divider');
 
-		debugDivision.addBlock(chalk.bold.underline('DIVISIONS'));
 		divisionsToMonitor.forEach(division => {
 			debugDivision.addBlock(division.options.id, division.options.id);
 		});
