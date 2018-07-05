@@ -28,10 +28,12 @@ class TerminalJumper {
 		this._onResizeDebounced = debounce(this._onResizeDebounced.bind(this), 200);
 
 		this._isInitiallyRendered = false;
+		this._isChaining = false;
+		this._chain = '';
 		this._uniqueIdCounter = 0;
 		this._bottomDivision = this._topDivision = null;
 
-		this.termSize = termSize();
+		this.termSize = this.getTermSize();
 
 		this.divisionsHash = {};
 		this.divisions = [];
@@ -161,20 +163,44 @@ class TerminalJumper {
 		return this._height;
 	}
 
-	chain(...writeStrings) {
-		let writeString = '';
-
-		for (let string of writeStrings) {
-			if (typeof string === 'string') {
-				writeString += string;
-			}
+	/**
+	 * Builds a string that will later be written to stdout using #execute().
+	 * Calling methods would normally immediately print to the terminal will
+	 * instead be appended to an instance variable. Affected methods are:
+	 * - render
+	 * - erase
+	 * - jumpTo
+	 */
+	chain() {
+		if (this._isChaining) {
+			return;
 		}
+		this._isChaining = true;
 
-		process.stdout.write(writeString);
+		return this;
+	}
+
+	appendToChain(string) {
+		this._chain += string;
+		return this;
+	}
+
+	execute() {
+		if (!this._isChaining) {
+			return;
+		}
+		this._isChaining = false;
+
+		process.stdout.write(this._chain);
+		this._chain = '';
+
+		return this;
 	}
 
 	render() {
-		process.stdout.write(this.renderString());
+		const str = this.renderString();
+		this._isChaining ? this._chain += str : process.stdout.write(str);
+		return this;
 	}
 
 	renderString() {
@@ -196,7 +222,7 @@ class TerminalJumper {
 			division._calculateDimensions(true);
 		}
 
-		const numRowsToAllocate = this.renderPosition.row + this.height() - this.termSize.rows;
+		const numRowsToAllocate = this.renderPosition.row + this.height() - 1 - this.termSize.rows;
 
 		if (numRowsToAllocate > 0) {
 			writeString += ansiEscapes.cursorTo(0, this.termSize.rows);
@@ -217,7 +243,9 @@ class TerminalJumper {
 	}
 
 	erase() {
-		process.stdout.write(this.eraseString());
+		const str = this.eraseString();
+		this._isChaining ? this._chain += str : process.stdout.write(str);
+		return this;
 	}
 
 	eraseString() {
@@ -234,8 +262,8 @@ class TerminalJumper {
 	}
 
 	jumpTo(target, col = 0, row = 0) {
-		const renderString = this.jumpToString(target, col, row);
-		process.stdout.write(renderString);
+		const str = this.jumpToString(target, col, row);
+		this._isChaining ? this._chain += str : process.stdout.write(str);
 		return this;
 	}
 
@@ -260,7 +288,9 @@ class TerminalJumper {
 			division = this.getDivision(division);
 		}
 
-		return division.scroll(scrollX, scrollY);
+		division.scroll(scrollX, scrollY);
+
+		return this;
 	}
 
 	scrollX(division, scrollX) {
@@ -276,7 +306,9 @@ class TerminalJumper {
 			division = this.getDivision(division);
 		}
 
-		return division.scrollUp(amount);
+		division.scrollUp(amount);
+
+		return this;
 	}
 
 	scrollDown(division, amount) {
@@ -284,7 +316,15 @@ class TerminalJumper {
 			division = this.getDivision(division);
 		}
 
-		return division.scrollDown(amount);
+		division.scrollDown(amount);
+
+		return this;
+	}
+
+	getTermSize() {
+		const size = termSize();
+		size.rows -= 1;
+		return size;
 	}
 
 	destroy() {
@@ -306,12 +346,16 @@ class TerminalJumper {
 		this.tree.setDirty(division);
 	}
 
+	_setNeedsRender(division) {
+		this.tree.setNeedsRender(division);
+	}
+
 	_onResizeDebounced() {
 		this._resize();
 	}
 
 	_resize() {
-		this.termSize = termSize();
+		this.termSize = this.getTermSize();
 
 		if (this._isInitiallyRendered) {
 			// erase everything on the screen
