@@ -53,6 +53,7 @@ class TextBlock {
 		return this;
 	}
 
+	// TODO: cache
 	height() {
 		return this.getLines().length;
 	}
