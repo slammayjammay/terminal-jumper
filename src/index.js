@@ -228,17 +228,17 @@ class TerminalJumper {
 			this._resize();
 		}
 
-		const dirtyNodes = this.tree.dirtyNodes();
-		const needsRenderNodes = this.tree.needsRenderNodes();
+		const dirtyDivisions = this.tree.dirtyNodes().map(node => node.division);
+		const needsRenderDivisions = this.tree.needsRenderNodes().map(node => node.division);
 
 		if (this.options.debug) {
-			this._renderDebugDivision({ dirtyNodes, needsRenderNodes });
+			this._renderDebugDivision({ dirtyDivisions, needsRenderDivisions });
 		}
 
 		this.tree.resetDirtyNodes();
 		this.tree.resetNeedsRenderNodes();
 
-		for (let { division } of dirtyNodes) {
+		for (let division of dirtyDivisions) {
 			division._calculateDimensions(true);
 		}
 
@@ -250,7 +250,7 @@ class TerminalJumper {
 			this.renderPosition.row -= numRowsToAllocate;
 		}
 
-		for (let { division } of needsRenderNodes) {
+		for (let division of needsRenderDivisions) {
 			writeString += division.renderString();
 		}
 
@@ -464,8 +464,13 @@ class TerminalJumper {
 		this.addDivision(options);
 
 		const debugDivision = this.getDivision(this._debugDivisionId);
-		debugDivision.addBlock(chalk.bold.underline('DIVISIONS'));
 
+		debugDivision.addBlock(`${chalk.bold.red('re-calculated & re-rendered')}`, 'legend-red');
+		debugDivision.addBlock(`${chalk.bold.yellow('re-rendered')}`, 'legend-yellow');
+		debugDivision.addBlock(`${chalk.bold.white('no change')}`, 'legend-white');
+		debugDivision.addBlock(new Array(debugDivision.width()).join('='), 'divider');
+
+		debugDivision.addBlock(chalk.bold.underline('DIVISIONS'));
 		divisionsToMonitor.forEach(division => {
 			debugDivision.addBlock(division.options.id, division.options.id);
 		});
@@ -479,26 +484,34 @@ class TerminalJumper {
 	 * WHITE -- division was neither re-calculated nor re-rendered.
 	 *
 	 * @param {object}
-	 * @prop {array} [allNodes] - All nodes in the tree.
-	 * @prop {array} [dirtyNodes] - All dirty nodes in the tree.
-	 * @prop {array} [needsRenderNodes] - All nodes that need rendering in the tree.
+	 * @prop {array} [allDivisions] - All nodes in the tree.
+	 * @prop {array} [dirtyDivisions] - All dirty nodes in the tree.
+	 * @prop {array} [needsRenderDivisions] - All nodes that need rendering in the tree.
 	 */
-	_renderDebugDivision({ dirtyNodes, needsRenderNodes, allNodes }) {
-		if (!dirtyNodes) dirtyNodes = this.tree.dirtyNodes();
-		if (!needsRenderNodes) needsRenderNodes = this.tree.needsRenderNodes();
-		if (!allNodes) allNodes = this.tree.allNodes();
+	_renderDebugDivision({ dirtyDivisions, needsRenderDivisions, allDivisions }) {
+		if (!dirtyDivisions) dirtyDivisions = this.tree.dirtyNodes().map(node => node.division);
+		if (!needsRenderDivisions) needsRenderDivisions = this.tree.needsRenderNodes().map(node => node.division);
+		if (!allDivisions) allDivisions = this.tree.allNodes().map(node => node.division);
 
-		const processed = { [this._debugDivisionId]: true };
+		const debugDivision = this.getDivision(this._debugDivisionId);
+		needsRenderDivisions.push(debugDivision);
+
+		// flash the divider green whenever this method is called (whenever #render
+		// is called)
+		this._flashDivider();
+
+		// iterate through all division ids and color them correctly
+		const processed = { [debugDivision.options.id]: true };
 		let division;
 
 		const map = [
-			[dirtyNodes, 'red'],
-			[needsRenderNodes, 'yellow'],
-			[allNodes, 'white']
+			[dirtyDivisions, 'red'],
+			[needsRenderDivisions, 'yellow'],
+			[allDivisions, 'white']
 		];
 
 		for (let [nodeTypes, color] of map) {
-			for ({ division } of nodeTypes) {
+			for (division of nodeTypes) {
 				if (processed[division.options.id]) {
 					continue;
 				}
@@ -509,7 +522,24 @@ class TerminalJumper {
 			}
 		}
 
-		this.getDivision(this._debugDivisionId).render();
+	}
+
+	_flashDivider() {
+		const divider = this.getBlock(`${this._debugDivisionId}.divider`);
+
+		// set green
+		divider.content(chalk.green(divider.escapedText));
+
+		// return to white
+		setTimeout(() => {
+			divider.content(divider.escapedText);
+
+			process.stdout.write(
+				ansiEscapes.cursorSavePosition +
+				this.getDivision(this._debugDivisionId).renderString() +
+				ansiEscapes.cursorRestorePosition
+			);
+		}, 400);
 	}
 }
 
