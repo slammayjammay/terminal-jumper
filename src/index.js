@@ -1,5 +1,6 @@
 const debounce = require('lodash.debounce');
 const termSize = require('term-size');
+const chalk = require('chalk');
 const ansiEscapes = require('ansi-escapes');
 const getCursorPosition = require('@patrickkettner/get-cursor-position');
 const Tree = require('./Tree');
@@ -12,7 +13,17 @@ const DEFAULT_OPTIONS = {
 		top: 0,
 		left: 0,
 		width: 1
-	}]
+	}],
+
+	/**
+	 * Debug mode -- on every render, lists each division's id and colors it to
+	 * show if it has been recalculated, re-rendered, etc.
+	 *
+	 * Can either be a boolean or the debug division's options.
+	 *
+	 * @type {boolean|object}
+	 */
+	debug: false
 };
 
 /**
@@ -32,6 +43,7 @@ class TerminalJumper {
 		this._chain = '';
 		this._uniqueIdCounter = 0;
 		this._bottomDivision = this._topDivision = null;
+		this._debugDivisionId = 'debug';
 
 		this.termSize = this.getTermSize();
 
@@ -40,6 +52,10 @@ class TerminalJumper {
 
 		this.tree = new Tree();
 		this.options.divisions.forEach(options => this.addDivision(options));
+
+		if (this.options.debug) {
+			this._addDebugDivision(this.options.debug);
+		}
 
 		process.stdout.on('resize', this._onResizeDebounced);
 	}
@@ -214,6 +230,10 @@ class TerminalJumper {
 
 		const dirtyNodes = this.tree.dirtyNodes();
 		const needsRenderNodes = this.tree.needsRenderNodes();
+
+		if (this.options.debug) {
+			this._renderDebugDivision({ dirtyNodes, needsRenderNodes });
+		}
 
 		this.tree.resetDirtyNodes();
 		this.tree.resetNeedsRenderNodes();
@@ -426,6 +446,70 @@ class TerminalJumper {
 			const twoPos = two.top() + two.height();
 			return twoPos > onePos ? 1 : -1;
 		})[0];
+	}
+
+	_addDebugDivision(options) {
+		if (typeof options !== 'object') {
+			options = {
+				id: this._debugDivisionId,
+				width: 0.25,
+				left: 0.75,
+				top: 0
+			};
+		}
+
+		const divisionsToMonitor = this.divisions.slice();
+
+		this._debugDivisionId = options.id;
+		this.addDivision(options);
+
+		const debugDivision = this.getDivision(this._debugDivisionId);
+		debugDivision.addBlock(chalk.bold.underline('DIVISIONS'));
+
+		divisionsToMonitor.forEach(division => {
+			debugDivision.addBlock(division.options.id, division.options.id);
+		});
+	}
+
+	/**
+	 * Parameters are options -- if given, they avoid recalculations.
+	 * Colors:
+	 * RED -- division was recalculated and re-rendered.
+	 * YELLOW -- division was re-rendered.
+	 * WHITE -- division was neither re-calculated nor re-rendered.
+	 *
+	 * @param {object}
+	 * @prop {array} [allNodes] - All nodes in the tree.
+	 * @prop {array} [dirtyNodes] - All dirty nodes in the tree.
+	 * @prop {array} [needsRenderNodes] - All nodes that need rendering in the tree.
+	 */
+	_renderDebugDivision({ dirtyNodes, needsRenderNodes, allNodes }) {
+		if (!dirtyNodes) dirtyNodes = this.tree.dirtyNodes();
+		if (!needsRenderNodes) needsRenderNodes = this.tree.needsRenderNodes();
+		if (!allNodes) allNodes = this.tree.allNodes();
+
+		const processed = { [this._debugDivisionId]: true };
+		let division;
+
+		const map = [
+			[dirtyNodes, 'red'],
+			[needsRenderNodes, 'yellow'],
+			[allNodes, 'white']
+		];
+
+		for (let [nodeTypes, color] of map) {
+			for ({ division } of nodeTypes) {
+				if (processed[division.options.id]) {
+					continue;
+				}
+				processed[division.options.id] = true;
+
+				const block = this.getBlock(`${this._debugDivisionId}.${division.options.id}`);
+				block.content(chalk[color](division.options.id));
+			}
+		}
+
+		this.getDivision(this._debugDivisionId).render();
 	}
 }
 

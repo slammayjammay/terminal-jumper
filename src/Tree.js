@@ -69,6 +69,12 @@ class Tree {
 		this._needsRenderNodes[division.options.id] = node;
 	}
 
+	allNodes() {
+		const allNodes = [];
+		this.traverseNodes(this.tree, node => allNodes.push(node));
+		return allNodes;
+	}
+
 	dirtyNodes() {
 		return Object.values(this._dirtyNodes);
 	}
