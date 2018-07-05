@@ -250,7 +250,17 @@ class Division {
 		return this;
 	}
 
-	// TODO: scrollLeft(), scrollRight()
+	scrollLeft(amount) {
+		const scrollX = this._constrainScrollX(this._scrollPosX - amount);
+		this.scroll(scrollX, null);
+		return this;
+	}
+
+	scrollRight(amount) {
+		const scrollX = this._constrainScrollX(this._scrollPosX + amount);
+		this.scroll(scrollX, null);
+		return this;
+	}
 
 	_constrainScrollX(scrollX) {
 		if (Math.abs(scrollX) > this.maxScrollX()) {
@@ -358,24 +368,30 @@ class Division {
 		const blockRowPos = blockPos.row + row + (row < 0 ? block.height() : 0);
 		const blockColPos = blockPos.col + col + (col < 0 ? block.getWidthOnRow(row) + 1 : 0);
 
-		// if the block row is off-screen, we need to scroll
-		if (blockRowPos - this.scrollPosY() < 0) {
-			this.scrollUp(blockRowPos);
+		let jumpX = blockColPos - this.scrollPosX();
+		let jumpY = blockRowPos - this.scrollPosY();
+
+		// scrollX if off-screen
+		if (blockColPos - this.scrollPosX() < 0) {
+			this.scrollLeft(Math.abs(jumpX));
 			writeString += this.jumper.renderString();
-		} else if (blockRowPos  - this.scrollPosY() > this.height()) {
-			this.scrollDown(blockRowPos - (this.height() - 1));
-			 writeString += this.jumper.renderString();
+			jumpX = 0;
+		} else if (blockColPos - this.scrollPosX() > this.width()) {
+			this.scrollRight(Math.abs(jumpX) - this.width());
+			writeString += this.jumper.renderString();
+			jumpX = this.width();
 		}
 
-		// TODO: get this working
-		// if (blockColPos - this.scrollPosX() < 0) {
-		// 	this.scrollLeft(blockColPos);
-		// } else if (blockColPos  - this.scrollPosX() > this.width()) {
-		// 	this.scrollUp(blockColPos - this.width());
-		// }
-
-		const jumpX = blockColPos - this.scrollPosX();
-		const jumpY = blockRowPos - this.scrollPosY();
+		// scrollY if off-screen
+		if (blockRowPos - this.scrollPosY() < 0) {
+			this.scrollUp(Math.abs(jumpY));
+			writeString += this.jumper.renderString();
+			jumpY = 0;
+		} else if (blockRowPos - this.scrollPosY() > this.height()) {
+			this.scrollDown(Math.abs(jumpY) - (this.height() - 1));
+			writeString += this.jumper.renderString();
+			jumpY = this.height() - 1;
+		}
 
 		const x = this.renderPosition.col - 1 + this.left() + jumpX;
 		const y = this.renderPosition.row - 1 + this.top() + jumpY;
