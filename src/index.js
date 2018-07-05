@@ -321,6 +321,26 @@ class TerminalJumper {
 		return this;
 	}
 
+	scrollLeft(division, amount) {
+		if (typeof division === 'string') {
+			division = this.getDivision(division);
+		}
+
+		division.scrollLeft(amount);
+
+		return this;
+	}
+
+	scrollRight(division, amount) {
+		if (typeof division === 'string') {
+			division = this.getDivision(division);
+		}
+
+		division.scrollRight(amount);
+
+		return this;
+	}
+
 	getTermSize() {
 		const size = termSize();
 		size.rows -= 1;
@@ -359,8 +379,8 @@ class TerminalJumper {
 
 		if (this._isInitiallyRendered) {
 			// erase everything on the screen
-			this.chain(
-				ansiEscapes.cursorTo(this.renderPosition.col - 1, this.renderPosition.row - 1),
+			process.stdout.write(
+				ansiEscapes.cursorTo(this.renderPosition.col - 1, this.renderPosition.row - 1) +
 				ansiEscapes.eraseDown
 			);
 		}
