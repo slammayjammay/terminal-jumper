@@ -65,7 +65,7 @@ class Division {
 		this.options = this._parseOptions(options);
 
 		this._top = this._left = this._width = this._height = null;
-		this._scrollX = this._scrollY = 0;
+		this._scrollPosX = this._scrollPosY = 0;
 		this._maxScrollX = this._maxScrollY = null;
 		this._allLines = null;
 
@@ -175,20 +175,20 @@ class Division {
 		return this._allLines;
 	}
 
-	scrollX() {
-		if (this._scrollX === null) {
-			this._scrollX = this._constrainScrollX(this._scrollX);
+	scrollPosX() {
+		if (this._scrollPosX === null) {
+			this._scrollPosX = this._constrainScrollX(this._scrollPosX);
 		}
 
-		return this._scrollX;
+		return this._scrollPosX;
 	}
 
-	scrollY() {
-		if (this._scrollY === null) {
-			this._scrollY = this._constrainScrollY(this._scrollY);
+	scrollPosY() {
+		if (this._scrollPosY === null) {
+			this._scrollPosY = this._constrainScrollY(this._scrollPosY);
 		}
 
-		return this._scrollY;
+		return this._scrollPosY;
 	}
 
 	maxScrollX() {
@@ -212,30 +212,45 @@ class Division {
 		if (typeof scrollX === 'number') {
 			scrollX = this._constrainScrollX(scrollX);
 
-			if (scrollX !== this._scrollX) {
-				this._scrollX = scrollX;
+			if (scrollX !== this._scrollPosX) {
+				this._scrollPosX = scrollX;
+				this.jumper._setNeedsRender(this);
 			}
 		}
 
 		if (typeof scrollY === 'number') {
 			scrollY = this._constrainScrollY(scrollY);
 
-			if (scrollY !== this._scrollY) {
-				this._scrollY = scrollY;
+			if (scrollY !== this._scrollPosY) {
+				this._scrollPosY = scrollY;
+				this.jumper._setNeedsRender(this);
 			}
 		}
+
+		return this;
+	}
+
+	scrollX(scrollX) {
+		return this.scroll(scrollX, null);
+	}
+
+	scrollY(scrollY) {
+		return this.scroll(null, scrollY);
 	}
 
 	scrollUp(amount) {
-		const scrollY = this._constrainScrollY(this._scrollY - amount);
-		this.scroll(null, scrollY);
-	}
-
-	scrollDown(amount) {
-		const scrollY = this._constrainScrollY(this._scrollY + amount);
+		const scrollY = this._constrainScrollY(this._scrollPosY - amount);
 		this.scroll(null, scrollY);
 		return this;
 	}
+
+	scrollDown(amount) {
+		const scrollY = this._constrainScrollY(this._scrollPosY + amount);
+		this.scroll(null, scrollY);
+		return this;
+	}
+
+	// TODO: scrollLeft(), scrollRight()
 
 	_constrainScrollX(scrollX) {
 		if (Math.abs(scrollX) > this.maxScrollX()) {
@@ -253,6 +268,7 @@ class Division {
 
 	render() {
 		process.stdout.write(this.renderString());
+		return this;
 	}
 
 	renderString() {
@@ -260,9 +276,9 @@ class Division {
 
 		// scrollX and scrollY
 		const linesToRender = this.allLines()
-			.slice(this.scrollY(), this.scrollY() + this.height())
+			.slice(this.scrollPosY(), this.scrollPosY() + this.height())
 			.map(line => {
-				const truncated = sliceAnsi(line, this.scrollX(), this.scrollX() + this.width());
+				const truncated = sliceAnsi(line, this.scrollPosX(), this.scrollPosX() + this.width());
 				const padded = new Array(this.width() + 1 - stripAnsi(truncated).length).join(' ');
 				return truncated + padded;
 			});
@@ -282,6 +298,7 @@ class Division {
 
 	erase() {
 		process.stdout.write(this.eraseString());
+		return this;
 	}
 
 	eraseString() {
@@ -310,32 +327,62 @@ class Division {
 	}
 
 	jumpToString(block, col = 0, row = 0) {
-		const blockGiven = (block !== undefined);
+		if (block) {
+			return this._jumpToBlockString(block, col, row);
+		}
+
+		const jumpX = (col >= 0) ? this.left() : this.left() + this.width() + 1;
+		const jumpY = (row >= 0) ? this.top() : this.top() + this.height();
+
+		const x = this.renderPosition.col - 1 + jumpX + col;
+		const y = this.renderPosition.row - 1 + jumpY + row;
+
+		return ansiEscapes.cursorTo(x, y);
+	}
+
+	_jumpToBlockString(block, col = 0, row = 0) {
+		let writeString = '';
 
 		let blockId = null;
 
-		if (blockGiven) {
-			if (typeof block === 'string') {
-				blockId = block;
-				block = this.getBlock(block);
-			} else {
-				blockId = Object.keys(this.blockHash).find(blockId => {
-					return this.blockHash[blockId] === block;
-				});
-			}
+		if (typeof block === 'string') {
+			blockId = block;
+			block = this.getBlock(block);
+		} else {
+			blockId = Object.keys(this.blockHash).find(blockId => {
+				return this.blockHash[blockId] === block;
+			});
 		}
 
-		const width = blockGiven ? block.getWidthOnRow(row) : this.width();
-		const height = blockGiven ? block.height() : this.height();
-		const offsetTop = blockGiven ? this._blockPositions[blockId].row : this.top();
+		const blockPos = this._blockPositions[blockId];
+		const blockRowPos = blockPos.row + row + (row < 0 ? block.height() : 0);
+		const blockColPos = blockPos.col + col + (col < 0 ? block.getWidthOnRow(row) + 1 : 0);
 
-		const startX = (col >= 0) ? this.left() : this.left() + width + 1;
-		const startY = (row >= 0) ? offsetTop : offsetTop + height;
+		// if the block row is off-screen, we need to scroll
+		if (blockRowPos - this.scrollPosY() < 0) {
+			this.scrollUp(blockRowPos);
+			writeString += this.jumper.renderString();
+		} else if (blockRowPos  - this.scrollPosY() > this.height()) {
+			this.scrollDown(blockRowPos - (this.height() - 1));
+			 writeString += this.jumper.renderString();
+		}
 
-		const x = this.renderPosition.col - 1 + startX + col;
-		const y = this.renderPosition.row - 1 + startY + row;
+		// TODO: get this working
+		// if (blockColPos - this.scrollPosX() < 0) {
+		// 	this.scrollLeft(blockColPos);
+		// } else if (blockColPos  - this.scrollPosX() > this.width()) {
+		// 	this.scrollUp(blockColPos - this.width());
+		// }
 
-		return ansiEscapes.cursorTo(x, y);
+		const jumpX = blockColPos - this.scrollPosX();
+		const jumpY = blockRowPos - this.scrollPosY();
+
+		const x = this.renderPosition.col - 1 + this.left() + jumpX;
+		const y = this.renderPosition.row - 1 + this.top() + jumpY;
+
+		writeString += ansiEscapes.cursorTo(x, y);
+
+		return writeString;
 	}
 
 	destroy() {
@@ -415,14 +462,14 @@ class Division {
 
 	_populateLines() {
 		this._allLines = [];
-		let posYInc = 0
+		let posYInc = 0;
 
 		for (let id of this.blockIds) {
 			const block = this.getBlock(id);
 			this._allLines.push(...block.getLines());
 
-			this._blockPositions[id].row = -this._scrollY + this.top() + posYInc;
-			this._blockPositions[id].col = this.left();
+			this._blockPositions[id].row = posYInc;
+			this._blockPositions[id].col = 0;
 
 			posYInc += block.height();
 		}
@@ -440,7 +487,7 @@ class Division {
 	}
 
 	_calculateMaxScrollY() {
-		return this._allLines.length - this.height();
+		return this.allLines().length - this.height();
 	}
 
 	_setDirty() {
