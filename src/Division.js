@@ -507,14 +507,14 @@ class Division {
 	}
 
 	_setDirty() {
-		this._resetDimensions();
-
-		if (this.jumper) {
-			this.jumper._setDirty(this);
-		}
+		this.jumper._setDirty(this);
 	}
 
 	_resetDimensions() {
+		if (this.jumper._isInitiallyRendered) {
+			this.jumper._internalChain += this.eraseString();
+		}
+
 		this._top = this._left = this._width = this._height = null;
 		this._maxScrollX = this._maxScrollY = null;
 		this._allLines = null;

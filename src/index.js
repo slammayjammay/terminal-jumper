@@ -41,6 +41,7 @@ class TerminalJumper {
 		this._isInitiallyRendered = false;
 		this._isChaining = false;
 		this._chain = '';
+		this._internalChain = '';
 		this._uniqueIdCounter = 0;
 		this._bottomDivision = this._topDivision = null;
 		this._debugDivisionId = 'debug';
@@ -188,11 +189,7 @@ class TerminalJumper {
 	 * - jumpTo
 	 */
 	chain() {
-		if (this._isChaining) {
-			return;
-		}
 		this._isChaining = true;
-
 		return this;
 	}
 
@@ -202,9 +199,6 @@ class TerminalJumper {
 	}
 
 	execute() {
-		if (!this._isChaining) {
-			return;
-		}
 		this._isChaining = false;
 
 		process.stdout.write(this._chain);
@@ -221,6 +215,9 @@ class TerminalJumper {
 
 	renderString() {
 		let writeString = '';
+
+		writeString += this._internalChain;
+		this._internalChain = '';
 
 		if (!this._isInitiallyRendered) {
 			this._isInitiallyRendered = true;
