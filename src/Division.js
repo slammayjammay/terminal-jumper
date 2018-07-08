@@ -314,7 +314,7 @@ class Division {
 	eraseString() {
 		let writeString = '';
 
-		const blankLine = new Array(this.width()).join(' ');
+		const blankLine = new Array(this.width() + 1).join(' ');
 
 		const startLeft = this.renderPosition.col + this.left() - 1;
 		const startTop = this.renderPosition.row + this.top() - 1;
