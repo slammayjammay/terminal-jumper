@@ -516,6 +516,7 @@ class Division {
 		}
 
 		this._top = this._left = this._width = this._height = null;
+		this._scrollPosX = this._scrollPosY = 0;
 		this._maxScrollX = this._maxScrollY = null;
 		this._allLines = null;
 	}
