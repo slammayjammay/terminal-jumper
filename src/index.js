@@ -273,7 +273,8 @@ class TerminalJumper {
 			this.tree.setNeedsRender(division);
 		}
 
-		writeString += this.jumpToString(this.topDivision(), 0, 0);
+		const [x, y] = [this.renderPosition.col - 1, this.renderPosition.row - 1];
+		writeString += ansiEscapes.cursorTo(x, y);
 
 		return writeString;
 	}
