@@ -12,7 +12,7 @@ There is a concept of "divisions" or sections of the window that `terminal-jumpe
 
 Divisions are what hold the actual text that will be printed to the terminal. You can add as many text blocks as you want, and you can update or remove them dynamically. Each division is responsible for rendering its own text content, and `terminal-jumper` will only render the divisions that need to be recalculated or re-rendered.
 
-See the [API](#api) or [Examples](#examples) sections for more detail.
+See the [examples](#examples) section or [API](#api) for more detail.
 
 ## Height
 This program is meant to take up _at most_ the entire terminal window. Any text that extends beyond the window height will not be rendered. If you want to render text output that is scrollable in the terminal, this is not the right package. That said, any text blocks that extend beyond the window height (or division height), can be "scrolled" (erased and re-rendered) via their containing division.
