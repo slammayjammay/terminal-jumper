@@ -2,7 +2,7 @@
 
 ## `new TerminalJumper(object options)`
 ### options.divisions
-An array containing [division options](../DivisionAPI.md#options).
+An array containing [division options](../docs/DivisionAPI.md#options).
 
 ### options.debug
 Boolean indicating whether to add the [debug division](../README.md#debugging).

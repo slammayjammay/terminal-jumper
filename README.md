@@ -87,4 +87,4 @@ I am text content on the left!
   - Writing one string to STDOUT is much more performant than writing multiple strings. Try to combine as many write strings as possible before finally writing to STDOUT. [TermanalJumper#chain](./docs/TerminalJumperAPI.md#chain) can help this.
 
 ## Debugging
-If the `debug` option is given when instantiating, `terminal-jumper` will add another division that will keep track of which divisions are recalculated or re-rendered whenever `TerminalJumper#render` is called. By default this division will be on the top-right corner of the program, but this can be overridden by providing a [division options](../DivisionAPI.md#options) object to the `debug` option.
+If the `debug` option is given when instantiating, `terminal-jumper` will add another division that will keep track of which divisions are recalculated or re-rendered whenever `TerminalJumper#render` is called. By default this division will be on the top-right corner of the program, but this can be overridden by providing a [division options](../docs/DivisionAPI.md#options) object to the `debug` option.
