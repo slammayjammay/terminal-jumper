@@ -133,6 +133,7 @@ class TerminalJumper {
 
 			if (!division && this.divisions[0].options.id === 'default-division') {
 				division = this.divisions[0];
+				blockId = text;
 				text = targets;
 			}
 		}
