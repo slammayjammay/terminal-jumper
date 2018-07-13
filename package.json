@@ -1,10 +1,11 @@
 {
   "name": "terminal-jumper",
   "version": "0.4.5",
-  "description": "Easily move the cursor around text blocks in terminal applications.",
+  "description": "terminal rendering system for interactive programs.",
   "main": "src/index.js",
   "keywords": [
     "terminal",
+    "render",
     "cursor",
     "output",
     "node"
@@ -24,8 +25,5 @@
     "strip-ansi": "^3.0.1",
     "term-size": "^1.2.0",
     "wrap-ansi": "^3.0.1"
-  },
-  "devDependencies": {
-    "jsdoc": "^3.4.3"
   }
 }

@@ -81,31 +81,6 @@ class TextBlock {
 		this._height = this._lines = null;
 	}
 
-	/**
-	 * Assumes `this.division.options.overflowX === 'wrap'`.
-	 * @param {string} text - A string with no newlines.
-	 */
-	getWrappedLine(text) {
-		if (this.division.options.wrapOnWord) {
-			return wrapAnsi(text, this.division.width(), { trim: false });
-		}
-
-		const textLength = stripAnsi(text).length;
-
-		const lines = [];
-		let startIdx = 0;
-		let remainder = text;
-
-		do {
-			lines.push(sliceAnsi(remainder, 0, this.division.width()));
-
-			startIdx += this.division.width();
-			remainder = sliceAnsi(remainder, this.division.width());
-		} while (startIdx <= textLength);
-
-		return lines.join('\n');
-	}
-
 	getRow(row) {
 		const lines = this._getLines();
 
@@ -125,7 +100,7 @@ class TextBlock {
 	}
 
 	destroy() {
-		this.division = null;
+		this.text = this.escapedText = this.division = null;
 	}
 
 	_calculateHeight() {
@@ -137,7 +112,7 @@ class TextBlock {
 			const lines = [];
 
 			for (let line of this.text.split('\n')) {
-				const wrapped = this.getWrappedLine(line);
+				const wrapped = this._getWrappedLine(line);
 				lines.push(...wrapped.split('\n'));
 			}
 
@@ -147,6 +122,31 @@ class TextBlock {
 		if (this.division.options.overflowX === 'scroll') {
 			return this.text.split('\n');
 		}
+	}
+
+	/**
+	 * Assumes `this.division.options.overflowX === 'wrap'`.
+	 * @param {string} text - A string with no newlines.
+	 */
+	_getWrappedLine(text) {
+		if (this.division.options.wrapOnWord) {
+			return wrapAnsi(text, this.division.width(), { trim: false });
+		}
+
+		const textLength = stripAnsi(text).length;
+
+		const lines = [];
+		let startIdx = 0;
+		let remainder = text;
+
+		do {
+			lines.push(sliceAnsi(remainder, 0, this.division.width()));
+
+			startIdx += this.division.width();
+			remainder = sliceAnsi(remainder, this.division.width());
+		} while (startIdx <= textLength);
+
+		return lines.join('\n');
 	}
 }
 

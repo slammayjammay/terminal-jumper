@@ -78,13 +78,7 @@ class TerminalJumper {
 	}
 
 	getDivision(id) {
-		return  this.divisionsHash[id];
-
-		if (!division) {
-			throw new Error(`Could not find division "${divisionId}".`);
-		}
-
-		return division;
+		return this.divisionsHash[id];
 	}
 
 	removeDivision(division) {
@@ -155,7 +149,7 @@ class TerminalJumper {
 		return this.getDivision(divisionId).hasBlock(blockId);
 	}
 
-	getBlock(targets, text) {
+	getBlock(targets) {
 		const [divisionId, blockId] = targets.split('.');
 
 		if (!divisionId) {
@@ -167,6 +161,20 @@ class TerminalJumper {
 		}
 
 		return this.getDivision(divisionId).getBlock(blockId);
+	}
+
+	removeBlock(targets) {
+		const [divisionId, blockId] = targets.split('.');
+
+		if (!divisionId) {
+			throw new Error('Division id must be specified.');
+		}
+
+		if (!blockId) {
+			throw new Error('Block id must be specified.');
+		}
+
+		return this.getDivision(divisionId).removeBlock(blockId);
 	}
 
 	height(division) {

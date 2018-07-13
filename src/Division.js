@@ -12,8 +12,7 @@ const DEFAULT_OPTIONS = {
 	id: null,
 
 	/**
-	 * top, left, width are required. Setting height is optional. If not set, will
-	 * shrink to the height of the content inside.
+	 * top, left, width are required. Height is optional.
 	 * All of these properties must be between 0 and 1. They are the percentages
 	 * of the terminal viewport. TODO: not this ^
 	 */
@@ -36,6 +35,7 @@ const DEFAULT_OPTIONS = {
 	width: null,
 
 	/**
+	 * Optional. If not set, will shrink to the height of the content inside.
 	 * @prop {number}
 	 */
 	height: null,
@@ -112,7 +112,11 @@ class Division {
 		return block;
 	}
 
-	remove(block) {
+	hasBlock(id) {
+		return !!this.blockHash[id];
+	}
+
+	removeBlock(block) {
 		let id;
 
 		if (typeof block === 'string') {
@@ -124,15 +128,13 @@ class Division {
 			});
 		}
 
+		block.destroy();
+
 		this.blockIds.splice(this.blockIds.indexOf(id), 1);
 		delete this.blockHash[id];
 		delete this._blockPositions[id];
 
 		this._setDirty();
-	}
-
-	hasBlock(id) {
-		return !!this.blockHash[id];
 	}
 
 	top() {
