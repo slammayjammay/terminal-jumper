@@ -33,7 +33,7 @@ jumper.addBlock('Some text output.');
 jumper.render();
 ```
 
-```sh
+```
 A Header
 Some text output.
 ```
@@ -70,7 +70,7 @@ jumper.render().jumpTo('right-division.right-text-id', -1);
 jumper.execute();
 ```
 
-```sh
+```
 LEFT HEADER                                 Please enter your name: > █
 I am text content on the left!
 ```
