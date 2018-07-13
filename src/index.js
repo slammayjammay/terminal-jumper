@@ -125,16 +125,16 @@ class TerminalJumper {
 	addBlock(targets, text) {
 		let division, blockId;
 
-		if (!targets) {
-			if (this.divisions.length > 1) {
-				throw new Error('Division id must be specified.');
-			} else {
-				division = this.divisions[0];
-			}
-		} else if (typeof targets === 'string') {
+		if (typeof targets === 'string') {
 			const ids = targets.split('.');
-			division = this.getDivision(ids[0]);
 			blockId = ids[1];
+
+			division = this.getDivision(ids[0]);
+
+			if (!division && this.divisions[0].options.id === 'default-division') {
+				division = this.divisions[0];
+				text = targets;
+			}
 		}
 
 		return division.addBlock(text, blockId);
