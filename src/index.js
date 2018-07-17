@@ -232,19 +232,21 @@ class TerminalJumper {
 			this._isInitiallyRendered = true;
 			this.renderPosition = getCursorPosition.sync();
 			this._resize();
+			return '';
 		}
 
-		const dirtyDivisions = this.tree.dirtyNodes().map(node => node.division);
-		const needsRenderDivisions = this.tree.needsRenderNodes().map(node => node.division);
+		// all "dirty" nodes will also be a "needsRender" node
+		const dirtyNodes = this.tree.dirtyNodes();
+		const needsRenderNodes = this.tree.needsRenderNodes();
 
 		if (this.options.debug) {
-			this._renderDebugDivision({ dirtyDivisions, needsRenderDivisions });
+			this._renderDebugDivision({ dirtyNodes, needsRenderNodes });
 		}
 
 		this.tree.resetDirtyNodes();
 		this.tree.resetNeedsRenderNodes();
 
-		for (let division of dirtyDivisions) {
+		for (let division of dirtyNodes.map(node => node.division)) {
 			division._calculateDimensions(true);
 		}
 
@@ -256,7 +258,7 @@ class TerminalJumper {
 			this.renderPosition.row -= numRowsToAllocate;
 		}
 
-		for (let division of needsRenderDivisions) {
+		for (let division of needsRenderNodes.map(node => node.division)) {
 			writeString += division.renderString();
 		}
 
@@ -476,31 +478,27 @@ class TerminalJumper {
 		debugDivision.addBlock(`${chalk.bold.yellow('● re-rendered')}`, 'legend-yellow');
 		debugDivision.addBlock(`${chalk.bold.white('● no change')}`, 'legend-white');
 		debugDivision.addBlock(new Array(debugDivision.width()).join('='), 'divider');
-
-		divisionsToMonitor.forEach(division => {
-			debugDivision.addBlock(division.options.id, division.options.id);
-		});
 	}
 
 	/**
-	 * Parameters are options -- if given, they avoid recalculations.
-	 * Colors:
+	 * Parameters are optional -- if given, they avoid recalculations.
+	 * Legend:
 	 * RED -- division was recalculated and re-rendered.
 	 * YELLOW -- division was re-rendered.
 	 * WHITE -- division was neither re-calculated nor re-rendered.
 	 *
 	 * @param {object}
-	 * @prop {array} [allDivisions] - All nodes in the tree.
-	 * @prop {array} [dirtyDivisions] - All dirty nodes in the tree.
-	 * @prop {array} [needsRenderDivisions] - All nodes that need rendering in the tree.
+	 * @prop {array} [allNodes] - All nodes in the tree.
+	 * @prop {array} [dirtyNodes] - All dirty nodes in the tree.
+	 * @prop {array} [needsRenderNodes] - All nodes that need rendering in the tree.
 	 */
-	_renderDebugDivision({ dirtyDivisions, needsRenderDivisions, allDivisions }) {
-		if (!dirtyDivisions) dirtyDivisions = this.tree.dirtyNodes().map(node => node.division);
-		if (!needsRenderDivisions) needsRenderDivisions = this.tree.needsRenderNodes().map(node => node.division);
-		if (!allDivisions) allDivisions = this.tree.allNodes().map(node => node.division);
+	_renderDebugDivision({ dirtyNodes, needsRenderNodes, allNodes }) {
+		if (!dirtyNodes) dirtyNodes = this.tree.dirtyNodes();
+		if (!needsRenderNodes) needsRenderNodes = this.tree.needsRenderNodes();
+		if (!allNodes) allNodes = this.tree.allNodes();
 
 		const debugDivision = this.getDivision(this._debugDivisionId);
-		needsRenderDivisions.push(debugDivision);
+		needsRenderNodes.push({ division: debugDivision }); // fake a node
 
 		// flash the divider green whenever this method is called (whenever #render
 		// is called)
@@ -508,26 +506,41 @@ class TerminalJumper {
 
 		// iterate through all division ids and color them correctly
 		const processed = { [debugDivision.options.id]: true };
-		let division;
 
 		const map = [
-			[dirtyDivisions, 'red'],
-			[needsRenderDivisions, 'yellow'],
-			[allDivisions, 'white']
+			[dirtyNodes, 'red'],
+			[needsRenderNodes, 'yellow'],
+			[allNodes, 'white']
 		];
 
+		let startNode; // correct spacing when showing dirty node hierarchy
+
 		for (let [nodeTypes, color] of map) {
-			for (division of nodeTypes) {
-				if (processed[division.options.id]) {
+			for (let node of nodeTypes) {
+				if (processed[node.division.options.id]) {
 					continue;
 				}
-				processed[division.options.id] = true;
+				processed[node.division.options.id] = true;
+				startNode = startNode || node;
 
-				const block = this.getBlock(`${this._debugDivisionId}.${division.options.id}`);
-				block.content(chalk[color](division.options.id));
+				const targets = `${this._debugDivisionId}.${node.division.options.id}`;
+
+				if (this.hasBlock(targets)) {
+					this.getBlock(targets).remove();
+				}
+
+				let text;
+
+				if (nodeTypes === dirtyNodes) {
+					const spacing = new Array(node.depth - startNode.depth + 1).join(' ');
+					text = `${spacing}${spacing ? '↳' : ''}${chalk.red(node.division.options.id)}`;
+				} else {
+					text = node.division.options.id;
+				}
+
+				this.addBlock(targets, text);
 			}
 		}
-
 	}
 
 	_flashDivider() {
