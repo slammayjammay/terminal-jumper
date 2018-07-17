@@ -75,7 +75,7 @@ class TextBlock {
 
 	remove() {
 		if (this.division) {
-			this.division.remove(this);
+			this.division.removeBlock(this);
 		}
 
 		this._height = this._lines = null;
