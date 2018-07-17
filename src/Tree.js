@@ -3,11 +3,6 @@ const Division = require('./Division');
 /**
  * In charge of rendering performance -- keeps track of which divisions need
  * recalculations and which divisions depend on dimensions of another division.
- *
- * Not in charge of all writes to STDOUT. For example in the case that a
- * division needs to scroll, no dimensions or recalculations need to happen even
- * though the division will need to render again. That will be done in
- * TerminalJumper.
  */
 class Tree {
 	constructor() {
@@ -76,11 +71,15 @@ class Tree {
 	}
 
 	dirtyNodes() {
-		return Object.values(this._dirtyNodes);
+		return Object.values(this._dirtyNodes).sort((a, b) => {
+			return (a.depth < b.depth) ? -1 : 1;
+		});
 	}
 
 	needsRenderNodes() {
-		return Object.values(this._needsRenderNodes);
+		return Object.values(this._needsRenderNodes).sort((a, b) => {
+			return (a.depth < b.depth) ? -1 : 1;
+		});
 	}
 
 	resetDirtyNodes() {
