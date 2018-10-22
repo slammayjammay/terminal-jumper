@@ -437,8 +437,15 @@ class Division {
 		if (force || this._width === null) this._width = this._calculateWidth();
 		if (force || this._allLines === null) this._populateLines();
 		if (force || this._height === null) this._height = this._calculateHeight();
-		if (force || this._maxScrollX === null) this._maxScrollX = this._calculateMaxScrollX();
-		if (force || this._maxScrollY === null) this._maxScrollY = this._calculateMaxScrollY();
+
+		if (force || this._maxScrollX === null) {
+			this._maxScrollX = this._calculateMaxScrollX();
+			this._scrollPosX = this._constrainScrollX(this._scrollPosX);
+		}
+		if (force || this._maxScrollY === null) {
+			this._maxScrollY = this._calculateMaxScrollY();
+			this._scrollPosY = this._constrainScrollY(this._scrollPosY);
+		}
 	}
 
 	_calculateTop() {
@@ -518,7 +525,6 @@ class Division {
 		}
 
 		this._top = this._left = this._width = this._height = null;
-		this._scrollPosX = this._scrollPosY = 0;
 		this._maxScrollX = this._maxScrollY = null;
 		this._allLines = null;
 	}
