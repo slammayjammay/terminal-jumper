@@ -241,25 +241,25 @@ class Division {
 	}
 
 	scrollUp(amount) {
-		const scrollY = this._constrainScrollY(this._scrollPosY - amount);
+		const scrollY = Math.max(0, this._constrainScrollY(this._scrollPosY - amount));
 		this.scroll(null, scrollY);
 		return this;
 	}
 
 	scrollDown(amount) {
-		const scrollY = this._constrainScrollY(this._scrollPosY + amount);
+		const scrollY = Math.max(0, this._constrainScrollY(this._scrollPosY + amount));
 		this.scroll(null, scrollY);
 		return this;
 	}
 
 	scrollLeft(amount) {
-		const scrollX = this._constrainScrollX(this._scrollPosX - amount);
+		const scrollX = Math.max(0, this._constrainScrollX(this._scrollPosX - amount));
 		this.scroll(scrollX, null);
 		return this;
 	}
 
 	scrollRight(amount) {
-		const scrollX = this._constrainScrollX(this._scrollPosX + amount);
+		const scrollX = Math.max(0, this._constrainScrollX(this._scrollPosX + amount));
 		this.scroll(scrollX, null);
 		return this;
 	}
