@@ -12,8 +12,8 @@ If a number is given, specifies the left offset of this division. Must be a perc
 ### options.width -- number|string
 The width of this division. Must be a percentage (0<=number<=1) of the window.
 
-### [options.height] -- number
-The height of this division. Must be a percentage (0<=number<=1) of the window. If not given, will shrink to the height of the content inside.
+### [options.height] -- number|string
+The height of this division. Must be a percentage (0<=number<=1) of the window. If set as 'full', set as the height of the entire program. If not given, will shrink to the height of the content inside.
 
 ### [options.id] -- string
 The id of this division. If not set, a default id will be used.
