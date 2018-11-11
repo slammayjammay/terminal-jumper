@@ -184,6 +184,7 @@ class TerminalJumper {
 
 		if (this._height === null) {
 			this._height = this._calculateHeight();
+			this._setFullHeightDivs(this._height);
 		}
 
 		return this._height;
@@ -425,6 +426,7 @@ class TerminalJumper {
 	_calculateDimensions() {
 		if (this._height === null) {
 			this._height = this._calculateHeight();
+			this._setFullHeightDivs(this._height);
 		}
 
 		if (this._bottomDivision === null) {
@@ -441,6 +443,12 @@ class TerminalJumper {
 			return division.height() + division.top();
 		});
 		return Math.max(...heights);
+	}
+
+	_setFullHeightDivs(height) {
+		for (const div of this.divisions.filter(div => div.options.height === 'full')) {
+			div._height = height;
+		}
 	}
 
 	_getTopDivision() {

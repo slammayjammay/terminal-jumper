@@ -36,7 +36,8 @@ const DEFAULT_OPTIONS = {
 
 	/**
 	 * Optional. If not set, will shrink to the height of the content inside.
-	 * @prop {number}
+	 * @prop {number|string} - If "full", sets the height equal to the height of
+	 * the program.
 	 */
 	height: null,
 
