@@ -505,7 +505,7 @@ class Division {
 	}
 
 	_calculateMaxScrollX() {
-		const lineLengths = this._allLines.map(line => {
+		const lineLengths = this.allLines().map(line => {
 			return stripAnsi(line).length - this.width();
 		});
 
