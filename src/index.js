@@ -38,13 +38,14 @@ class TerminalJumper {
 
 		this._onResizeDebounced = debounce(this._onResizeDebounced.bind(this), 200);
 
-		this._isInitiallyRendered = false;
-		this._isChaining = false;
-		this._chain = '';
-		this._internalChain = '';
-		this._uniqueIdCounter = 0;
-		this._bottomDivision = this._topDivision = null;
-		this._debugDivisionId = 'debug';
+		this.renderPosition = null; // top left corner of the program
+		this._isInitiallyRendered = false; // have we rendered once already?
+		this._isChaining = false; // is writing to a string, or stdout directly?
+		this._chain = ''; // internal string, to be written to stdout (API use)
+		this._internalChain = ''; // internal string, (internal use)
+		this._uniqueIdCounter = 0; // counter for unique division id
+		this._bottomDivision = this._topDivision = null; // store top and bottom divisions
+		this._debugDivisionId = 'debug'; // id for debug division
 
 		this.termSize = this.getTermSize();
 
@@ -230,8 +231,10 @@ class TerminalJumper {
 		this._internalChain = '';
 
 		if (!this._isInitiallyRendered) {
+			// get the cursor position. we only care about which row the cursor is on
+			this.renderPosition = this._getCursorPosition();
+			this.renderPosition.col = 1;
 			this._isInitiallyRendered = true;
-			this.renderPosition = getCursorPosition.sync();
 			this._resize();
 			return '';
 		}
@@ -389,6 +392,23 @@ class TerminalJumper {
 		this.termSize = this.renderPosition = null;
 
 		process.stdout.removeListener('resize', this._onResizeDebounced);
+	}
+
+	/**
+	 * Wrapper for `get-cursor-position`. It appears that if stdin is written to
+	 * before getting the cursor position, it doesn't work properly. A subsequent
+	 * call to it will work, however.
+	 * This only needs to be called once, for the initial render. Afterward we
+	 * can deduce the cursor position based on division/block dimensions.
+	 */
+	_getCursorPosition() {
+		let pos;
+
+		while (!pos) {
+			pos = getCursorPosition.sync();
+		}
+
+		return pos;
 	}
 
 	_setDirty(division) {
