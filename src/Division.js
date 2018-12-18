@@ -5,6 +5,11 @@ const stripAnsi = require('strip-ansi');
 const sliceAnsi = require('slice-ansi');
 const TextBlock = require('./TextBlock');
 
+const SCROLLBAR_VERTICAL_BACKGROUND = chalk.bold.rgb(102, 102, 102)('⎹');
+const SCROLLBAR_VERTICAL_FOREGROUND = chalk.bold.white('⎹');
+const SCROLLBAR_HORIZONTAL_BACKGROUND = chalk.rgb(102, 102, 102)('▁');
+const SCROLLBAR_HORIZONTAL_FOREGROUND = chalk.white('▁');
+
 const DEFAULT_OPTIONS = {
 	/**
 	 * The id that TerminalJumper associates with this division.
@@ -47,6 +52,12 @@ const DEFAULT_OPTIONS = {
 	overflowX: 'wrap',
 
 	/**
+	 * @prop {object} scrollBarX -- sets the chars for the scroll bar foreground
+	 * and background.
+	 */
+	scrollBarX: false,
+
+	/**
 	 * If set to "auto", the division content determines the division height,
 	 * until the program fills up the entire screen. At that point, the division
 	 * will scroll any content outside of the viewport.
@@ -54,6 +65,12 @@ const DEFAULT_OPTIONS = {
 	 * @prop {string} overflowY - "auto|scroll".
 	 */
 	overflowY: 'auto',
+
+	/**
+	 * @prop {object} scrollBarY -- sets the chars for the scroll bar foreground
+	 * and background.
+	 */
+	scrollBarY: false,
 
 	/**
 	 * @propt {boolean} wrapOnWord - Wrap on word breaks.
@@ -65,6 +82,7 @@ class Division {
 	constructor(options = {}) {
 		this.options = this._parseOptions(options);
 
+		// calculated values
 		this._top = this._left = this._width = this._height = null;
 		this._scrollPosX = this._scrollPosY = 0;
 		this._maxScrollX = this._maxScrollY = null;
@@ -74,22 +92,46 @@ class Division {
 		this.blockHash = {};
 		this._blockPositions = {};
 		this._uniqueIdCounter = 0;
+		this._prevHeight = null;
 	}
 
 	_parseOptions(options) {
+		// must have an id
 		if (!options.id) {
 			throw new Error(`Options property "id" must be present.`);
 		}
 
+		// must have a width
 		if (typeof options.width !== 'number') {
 			throw new Error(`Options property "width" must be a number between 0 and 1.`);
 		}
 
+		// if vertical scroll, must have explicit height
 		if (options.overflowY === 'scroll' && typeof options.height !== 'number') {
 			throw new Error('Must set division height when overflowY is "scroll".');
 		}
 
-		return Object.assign({}, DEFAULT_OPTIONS, options);
+		// if horizontal scroll bars, must set overflowX as scroll
+		if (options.scrollBarX && options.overflowX !== 'scroll') {
+			throw new Error('Must set overflowX as "scroll" if scroll bars are present.');
+		}
+
+		const parsedOptions = Object.assign({}, DEFAULT_OPTIONS, options);
+
+		// set default scrollbar chars
+		if (parsedOptions.scrollBarX) {
+			parsedOptions.scrollBarX = typeof parsedOptions.scrollBarX === 'object' ? parsedOptions.scrollBarX : {};
+			parsedOptions.scrollBarX.background = parsedOptions.scrollBarX.background || SCROLLBAR_HORIZONTAL_BACKGROUND;
+			parsedOptions.scrollBarX.foreground = parsedOptions.scrollBarX.foreground || SCROLLBAR_HORIZONTAL_FOREGROUND;
+		}
+
+		if (parsedOptions.scrollBarY) {
+			parsedOptions.scrollBarY = typeof parsedOptions.scrollBarY === 'object' ? parsedOptions.scrollBarY : {};
+			parsedOptions.scrollBarY.background = parsedOptions.scrollBarY.background || SCROLLBAR_VERTICAL_BACKGROUND;
+			parsedOptions.scrollBarY.foreground = parsedOptions.scrollBarY.foreground || SCROLLBAR_VERTICAL_FOREGROUND;
+		}
+
+		return parsedOptions;
 	}
 
 	addBlock(text, id) {
@@ -157,17 +199,40 @@ class Division {
 	width() {
 		if (this._width === null) {
 			this._width = this._calculateWidth();
+			this._maxScrollX = null;
 		}
 
 		return this._width;
 	}
 
+	/**
+	 * Returns the width, after taking scroll bar into account.
+	 */
+	contentWidth() {
+		return this.width() - (this.hasScrollBarY() ? 1 : 0);
+	}
+
 	height() {
-		if (this._height === null) {
+		if (this.options.height === 'full') {
+			this._height = this.jumper.height();
+		} else if (this._height === null) {
 			this._height = this._calculateHeight();
+			this._maxScrollY = null;
 		}
 
 		return this._height;
+	}
+
+	/**
+	 * Returns the height, after taking scroll bar into account.
+	 */
+	contentHeight() {
+		if (!this.hasScrollBarX()) {
+			return this.height();
+		}
+
+		const availableSpace = this.termSize.rows - 1 - this.top() - this.height();
+		return this.height() - (availableSpace > 0 ? 0 : 1);
 	}
 
 	allLines() {
@@ -265,6 +330,23 @@ class Division {
 		return this;
 	}
 
+	hasScrollBarX() {
+		return this.options.scrollBarX && this.maxScrollX() > 0;
+	}
+
+	hasScrollBarY() {
+		return this.options.scrollBarY && this.maxScrollY() > 0;
+	}
+
+	/**
+	 * Internally called by TerminalJumper, applicable only for "full height"
+	 * divs. Recalculates any dimensions that depend on height.
+	 */
+	_setHeight(height) {
+		this._height = height;
+		this._maxScrollY = null;
+	}
+
 	_constrainScrollX(scrollX) {
 		if (Math.abs(scrollX) > this.maxScrollX()) {
 			scrollX = this.maxScrollX() * (scrollX < 0 ? -1 : 1);
@@ -286,15 +368,53 @@ class Division {
 
 	renderString() {
 		let renderString = '';
+		let linesToRender = this.allLines();
 
-		// scrollX and scrollY
-		const linesToRender = this.allLines()
-			.slice(this.scrollPosY(), this.scrollPosY() + this.height())
-			.map(line => {
-				const truncated = sliceAnsi(line, this.scrollPosX(), this.scrollPosX() + this.width());
-				const padded = new Array(this.width() + 1 - stripAnsi(truncated).length).join(' ');
-				return truncated + padded;
+		// scrollY
+		linesToRender = linesToRender.slice(this.scrollPosY(), this.scrollPosY() + this.contentHeight());
+
+		// scrollX
+		linesToRender = linesToRender.map(line => {
+			const truncated = sliceAnsi(line, this.scrollPosX(), this.scrollPosX() + this.contentWidth() - 1);
+			const padded = new Array(this.contentWidth() - stripAnsi(truncated).length).join(' ');
+			return truncated + padded;
+		});
+
+		// render vertical scroll bar
+		if (this.hasScrollBarY()) {
+			const heightPercentage = this.contentHeight() / (this.contentHeight() + this.maxScrollY());
+			const scrollBarHeight = ~~(this.contentHeight() * heightPercentage);
+			const travelDistance = ~~(this.contentHeight() * (1 - heightPercentage));
+			const scrollBarStartIdx = ~~(travelDistance * (this.scrollPosY() / this.maxScrollY()));
+			const scrollBarEndIdx = scrollBarStartIdx + scrollBarHeight;
+
+			linesToRender = linesToRender.map((line, idx) => {
+				let scrollBarChar;
+
+				if (idx >= scrollBarStartIdx && idx <= scrollBarEndIdx) {
+					scrollBarChar = this.options.scrollBarY.foreground;
+				} else {
+					scrollBarChar = this.options.scrollBarY.background;
+				}
+
+				return `${line}${scrollBarChar}`;
 			});
+		}
+
+		// render horizontal scroll bar
+		if (this.hasScrollBarX()) {
+			const widthPercentage = this.contentWidth() / (this.contentWidth() + this.maxScrollX());
+			const scrollBarWidth = ~~(this.contentWidth() * widthPercentage);
+			const travelDistance = ~~(this.contentWidth() * (1 - widthPercentage));
+			const scrollBarStartIdx = ~~(travelDistance * (this.scrollPosX() / this.maxScrollX()));
+
+			let horizontalScrollBar = '';
+			horizontalScrollBar += new Array(1 + scrollBarStartIdx).join(this.options.scrollBarX.background);
+			horizontalScrollBar += new Array(1 + scrollBarWidth).join(this.options.scrollBarX.foreground);
+			horizontalScrollBar += new Array(this.contentWidth() - (scrollBarWidth + scrollBarStartIdx)).join(this.options.scrollBarX.background);
+
+			linesToRender.push(horizontalScrollBar);
+		}
 
 		const startLeft = this.renderPosition.col + this.left() - 1;
 		const startTop = this.renderPosition.row + this.top() - 1;
@@ -305,6 +425,8 @@ class Division {
 			renderString += line;
 			lineIncrement += 1;
 		}
+
+		this._prevHeight = this.height() + (this.hasScrollBarX() ? 1 : 0);
 
 		return renderString;
 	}
@@ -319,13 +441,20 @@ class Division {
 
 		const blankLine = new Array(this.width() + 1).join(' ');
 
-		const startLeft = this.renderPosition.col + this.left() - 1;
+		const startLeft = this.renderPosition.col + this.left() - 2;
 		const startTop = this.renderPosition.row + this.top() - 1;
 		let lineIncrement = 0;
 
 		writeString += ansiEscapes.cursorTo(startLeft, startTop);
 
-		for (let i = 0, height = this.height(); i < height; i++) {
+		let height;
+		if (this.options.height === 'full') {
+			height = this.jumper.height() - this.top();
+		} else {
+			height = this._prevHeight ? this._prevHeight : this.height();
+		}
+
+		for (let i = 0; i < height; i++) {
 			writeString += ansiEscapes.cursorTo(startLeft, startTop + lineIncrement);
 			writeString += blankLine;
 			lineIncrement += 1;
@@ -355,7 +484,6 @@ class Division {
 
 	_jumpToBlockString(block, col = 0, row = 0) {
 		let writeString = '';
-
 		let blockId = null;
 
 		if (typeof block === 'string') {
@@ -423,21 +551,25 @@ class Division {
 	 * @param {boolean} force - Force calculations.
 	 *
 	 * Steps:
+	 *   - populates `this._allLines`
 	 *   - calculates top
 	 *   - calculates left
 	 *   - calculates width
-	 *   - populates `this._allLines`
 	 *   - calculates height (depends on `this._allLines`)
 	 *   - sets position of each block (depends on "top" and "left")
 	 *   - calculates maxScrollX (depends on `this._allLines` and "width")
 	 *   - calculates maxScrollY (depends on `this._allLines` and "height")
+	 *   - Adjust width/height based on whether scroll bars are present
 	 */
 	_calculateDimensions(force) {
+		if (force || this._allLines === null) this._populateLines();
 		if (force || this._top === null) this._top = this._calculateTop();
 		if (force || this._left === null) this._left = this._calculateLeft();
 		if (force || this._width === null) this._width = this._calculateWidth();
-		if (force || this._allLines === null) this._populateLines();
-		if (force || this._height === null) this._height = this._calculateHeight();
+
+		if (this.options.height !== 'full' && (force || this._height === null)) {
+			this._height = this._calculateHeight();
+		}
 
 		if (force || this._maxScrollX === null) {
 			this._maxScrollX = this._calculateMaxScrollX();
@@ -446,6 +578,16 @@ class Division {
 		if (force || this._maxScrollY === null) {
 			this._maxScrollY = this._calculateMaxScrollY();
 			this._scrollPosY = this._constrainScrollY(this._scrollPosY);
+		}
+
+		const hasScrollBarX = this.hasScrollBarX();
+		const hasScrollBarY = this.hasScrollBarY();
+
+		if (hasScrollBarX && (this.top() + this.height() >= this.termSize.rows - 1)) {
+			this._maxScrollY += 1;
+		}
+		if (hasScrollBarY && this._maxScrollX > 0) {
+			this._maxScrollX += 1;
 		}
 	}
 
@@ -506,7 +648,7 @@ class Division {
 
 	_calculateMaxScrollX() {
 		const lineLengths = this.allLines().map(line => {
-			return stripAnsi(line).length - this.width();
+			return stripAnsi(line).length - (this.width() - 1);
 		});
 
 		return Math.max(...lineLengths, 0);
@@ -525,9 +667,13 @@ class Division {
 			this.jumper._internalChain += this.eraseString();
 		}
 
-		this._top = this._left = this._width = this._height = null;
+		this._top = this._left = this._width = null;
 		this._maxScrollX = this._maxScrollY = null;
 		this._allLines = null;
+
+		if (this.options.height !== 'full') {
+			this._height = null;
+		}
 	}
 
 	_resize(terminalSize, renderPosition) {

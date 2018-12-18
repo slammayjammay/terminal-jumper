@@ -110,9 +110,10 @@ class TextBlock {
 	_getLines() {
 		if (this.division.options.overflowX === 'wrap') {
 			const lines = [];
+			const divisionWidth = this.division.contentWidth();
 
 			for (let line of this.text.split('\n')) {
-				const wrapped = this._getWrappedLine(line);
+				const wrapped = this._getWrappedLine(line, divisionWidth);
 				lines.push(...wrapped.split('\n'));
 			}
 
@@ -128,9 +129,9 @@ class TextBlock {
 	 * Assumes `this.division.options.overflowX === 'wrap'`.
 	 * @param {string} text - A string with no newlines.
 	 */
-	_getWrappedLine(text) {
+	_getWrappedLine(text, divisionWidth) {
 		if (this.division.options.wrapOnWord) {
-			return wrapAnsi(text, this.division.width(), { trim: false });
+			return wrapAnsi(text, divisionWidth, { trim: false });
 		}
 
 		const textLength = stripAnsi(text).length;
@@ -140,10 +141,10 @@ class TextBlock {
 		let remainder = text;
 
 		do {
-			lines.push(sliceAnsi(remainder, 0, this.division.width()));
+			lines.push(sliceAnsi(remainder, 0, divisionWidth));
 
-			startIdx += this.division.width();
-			remainder = sliceAnsi(remainder, this.division.width());
+			startIdx += divisionWidth;
+			remainder = sliceAnsi(remainder, divisionWidth);
 		} while (startIdx <= textLength);
 
 		return lines.join('\n');

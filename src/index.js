@@ -43,7 +43,6 @@ class TerminalJumper {
 		this._chain = '';
 		this._internalChain = '';
 		this._uniqueIdCounter = 0;
-		this._bottomDivision = this._topDivision = null;
 		this._debugDivisionId = 'debug';
 
 		this.termSize = this.getTermSize();
@@ -98,22 +97,6 @@ class TerminalJumper {
 	reset() {
 		this.removeDivision(this.divisions.slice());
 		this.addDivision(DEFAULT_OPTIONS.divisions[0]);
-	}
-
-	topDivision() {
-		if (this._topDivision === null) {
-			this._topDivision = this._getTopDivision();
-		}
-
-		return this._topDivision;
-	}
-
-	bottomDivision() {
-		if (this._bottomDivision === null) {
-			this._bottomDivision = this._getBottomDivision();
-		}
-
-		return this._bottomDivision;
 	}
 
 	addBlock(targets, text) {
@@ -184,7 +167,6 @@ class TerminalJumper {
 
 		if (this._height === null) {
 			this._height = this._calculateHeight();
-			this._setFullHeightDivs(this._height);
 		}
 
 		return this._height;
@@ -236,6 +218,10 @@ class TerminalJumper {
 			return '';
 		}
 
+		// set full height divs
+		const height = this.height();
+		this._setFullHeightDivs(height);
+
 		// all "dirty" nodes will also be a "needsRender" node
 		const dirtyNodes = this.tree.dirtyNodes();
 		const needsRenderNodes = this.tree.needsRenderNodes();
@@ -251,8 +237,7 @@ class TerminalJumper {
 			division._calculateDimensions(true);
 		}
 
-		const numRowsToAllocate = this.renderPosition.row + this.height() - 1 - this.termSize.rows;
-
+		const numRowsToAllocate = this.renderPosition.row + height - 1 - this.termSize.rows;
 		if (numRowsToAllocate > 0) {
 			writeString += ansiEscapes.cursorTo(0, this.termSize.rows);
 			writeString += new Array(numRowsToAllocate + 1).join('\n');
@@ -263,10 +248,9 @@ class TerminalJumper {
 			writeString += division.renderString();
 		}
 
-		writeString += this.jumpToString(this.bottomDivision(), 0, -1);
-		writeString += ansiEscapes.cursorLeft;
-		writeString += ansiEscapes.cursorDown();
-		writeString += ansiEscapes.eraseDown;
+		if (dirtyNodes.length > 0) {
+			this._height = null;
+		}
 
 		return writeString;
 	}
@@ -372,9 +356,7 @@ class TerminalJumper {
 	}
 
 	getTermSize() {
-		const size = termSize();
-		size.rows -= 1;
-		return size;
+		return termSize();
 	}
 
 	destroy() {
@@ -385,14 +367,13 @@ class TerminalJumper {
 		}
 
 		this.divisions = this.divisionsHash = null;
-		this._topDivision = this._bottomDivision = null;
 		this.termSize = this.renderPosition = null;
 
 		process.stdout.removeListener('resize', this._onResizeDebounced);
 	}
 
 	_setDirty(division) {
-		this._height = this._topDivision = this._bottomDivision = null;
+		this._height = null;
 		this.tree.setDirty(division);
 	}
 
@@ -423,40 +404,38 @@ class TerminalJumper {
 		this.render();
 	}
 
-	_calculateDimensions() {
-		if (this._height === null) {
-			this._height = this._calculateHeight();
-			this._setFullHeightDivs(this._height);
-		}
-
-		if (this._bottomDivision === null) {
-			this._bottomDivision = this._getBottomDivision();
-		}
-
-		if (this._topDivision === null) {
-			this._topDivision = this._getTopDivision();
-		}
-	}
-
 	_calculateHeight() {
-		const heights = this.divisions.map(division => {
-			return division.height() + division.top();
+		let height = 0;
+
+		const divsWithSetHeight = this.divisions.filter(div => {
+			return div.options.height !== 'full';
 		});
-		return Math.max(...heights);
+
+		for (const div of divsWithSetHeight) {
+			const divHeight = div.top() + div.height();
+			if (divHeight > height) {
+				height = divHeight;
+			}
+		}
+
+		return height;
 	}
 
 	_setFullHeightDivs(height) {
 		for (const div of this.divisions.filter(div => div.options.height === 'full')) {
-			div._height = height;
+			div._setHeight(height - div.top());
+			this.tree.setDirty(div);
 		}
 	}
 
+	// TODO: this is not best
 	_getTopDivision() {
 		return this.divisions.sort((one, two) => {
 			return one.top() <= two.top() ? -1 : 1;
 		})[0];
 	}
 
+	// TODO: this is not best
 	_getBottomDivision() {
 		return this.divisions.sort((one, two) => {
 			const onePos = one.top() + one.height();
