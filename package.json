@@ -1,6 +1,6 @@
 {
   "name": "terminal-jumper",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Terminal rendering system for interactive programs.",
   "main": "src/index.js",
   "keywords": [
