@@ -1,8 +1,7 @@
-const ansiEscapes = require('ansi-escapes')
-const stripAnsi = require('strip-ansi')
-const sliceAnsi = require('slice-ansi')
-const wrapAnsi = require('wrap-ansi')
-const getCursorPosition = require('@patrickkettner/get-cursor-position')
+const ansiEscapes = require('ansi-escapes');
+const stripAnsi = require('strip-ansi');
+const sliceAnsi = require('slice-ansi');
+const wrapAnsi = require('wrap-ansi');
 
 // in order to calculate height correctly, translate tab characters into spaces.
 // this way we can check if `string.length` is more than `process.sdtout.columns`
