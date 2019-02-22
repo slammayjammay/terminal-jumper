@@ -34,11 +34,11 @@ class TextBlock {
 
 		this.escapedText = stripAnsi(this.text);
 
+		this._height = this._lines = null;
+
 		if (this.division) {
 			this.division._setDirty();
 		}
-
-		this._height = this._lines = null;
 
 		return this;
 	}
