@@ -14,33 +14,10 @@ const TAB_FAKER = new Array(TAB_WIDTH).join(' ');
  */
 class TextBlock {
 	constructor(text = '') {
-		this.text = '';
-		this.escapedText = '';
-
+		this.text = this.escapedText = '';
 		this._height = this._lines = null;
 
-		this.append(text);
-	}
-
-	/**
-	 * Appends a string of text to this block.
-	 *
-	 * @param {string} text - The string to append.
-	 * @return {TextBlock}
-	 */
-	append(text) {
-		text = text.replace(/\t/g, TAB_FAKER);
-		this.text += text;
-
-		this.escapedText = stripAnsi(this.text);
-
-		this._height = this._lines = null;
-
-		if (this.division) {
-			this.division._setDirty();
-		}
-
-		return this;
+		this.content(text);
 	}
 
 	/**
@@ -50,9 +27,31 @@ class TextBlock {
 	 * @return {TextBlock}
 	 */
 	content(text) {
-		this.text = '';
-		this.append(text);
+		text = text.replace(/\t/g, TAB_FAKER);
 
+		const escaped = stripAnsi(text);
+		const hasChanged = escaped !== this.escapedText;
+
+		this.text = text;
+		this.escapedText = escaped;
+
+		this._height = this._lines = null;
+
+		if (this.division) {
+			hasChanged ? this.division._setDirty() : this.division._setNeedsRender(this);
+		}
+
+		return this;
+	}
+
+	/**
+	 * Appends a string of text to this block.
+	 *
+	 * @param {string} text - The string to append.
+	 * @return {TextBlock}
+	 */
+	append(text) {
+		this.content(this.text + text);
 		return this;
 	}
 
@@ -146,7 +145,7 @@ class TextBlock {
 			remainder = sliceAnsi(remainder, divisionWidth);
 		} while (startIdx <= textLength);
 
-		return lines.join('\n');
+		return lines.filter(s => s !== '').join('\n');
 	}
 }
 

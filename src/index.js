@@ -2,7 +2,7 @@ const debounce = require('lodash.debounce');
 const termSize = require('term-size');
 const chalk = require('chalk');
 const ansiEscapes = require('ansi-escapes');
-const getCursorPosition = require('@patrickkettner/get-cursor-position');
+const getCursorPosition = require('get-cursor-position');
 const Tree = require('./Tree');
 const Division = require('./Division');
 const TextBlock = require('./TextBlock');
@@ -39,7 +39,7 @@ class TerminalJumper {
 		this._onResizeDebounced = debounce(this._onResizeDebounced.bind(this), 200);
 
 		this.renderPosition = null; // top left corner of the program
-		this._isInitiallyRendered = false; // have we rendered once already?
+		this.isInitiallyRendered = false; // have we rendered once already?
 		this._isChaining = false; // is writing to a string, or stdout directly?
 		this._chain = ''; // internal string, to be written to stdout (API use)
 		this._internalChain = ''; // internal string, (internal use)
@@ -201,26 +201,32 @@ class TerminalJumper {
 		return this;
 	}
 
-	render() {
-		const str = this.renderString();
+	_setupInitialRender() {
+		// get the cursor position. we only care about which row the cursor is on
+		this.renderPosition = this._getCursorPosition();
+		this.renderPosition.col = 1;
+		this.isInitiallyRendered = true;
+		this._resize();
+	}
+
+	render(options = {}) {
+		if (!this.isInitiallyRendered) {
+			this._setupInitialRender();
+		}
+
+		const str = this.renderString(options);
 		this._isChaining ? this._chain += str : process.stdout.write(str);
 		return this;
 	}
 
-	renderString() {
-		let writeString = '';
+	renderString(options = {}) {
+		if (!this.isInitiallyRendered) {
+			this._setupInitialRender();
+		}
 
+		let writeString = '';
 		writeString += this._internalChain;
 		this._internalChain = '';
-
-		if (!this._isInitiallyRendered) {
-			// get the cursor position. we only care about which row the cursor is on
-			this.renderPosition = this._getCursorPosition();
-			this.renderPosition.col = 1;
-			this._isInitiallyRendered = true;
-			this._resize();
-			return '';
-		}
 
 		// set full height divs
 		const height = this.height();
@@ -286,7 +292,7 @@ class TerminalJumper {
 	}
 
 	jumpToString(target, col = 0, row = 0) {
-		if (!this._isInitiallyRendered) {
+		if (!this.isInitiallyRendered) {
 			return '';
 		}
 
@@ -393,23 +399,32 @@ class TerminalJumper {
 		return pos;
 	}
 
-	_setDirty(division) {
+	setDirty(division) {
+		if (typeof division === 'string') {
+			division = this.getDivision(division);
+		}
+
 		this._height = null;
 		this.tree.setDirty(division);
 	}
 
-	_setNeedsRender(division) {
+	setNeedsRender(division) {
+		if (typeof division === 'string') {
+			division = this.getDivision(division);
+		}
+
 		this.tree.setNeedsRender(division);
 	}
 
 	_onResizeDebounced() {
 		this._resize();
+		this.render();
 	}
 
 	_resize() {
 		this.termSize = this.getTermSize();
 
-		if (this._isInitiallyRendered) {
+		if (this.isInitiallyRendered) {
 			// erase everything on the screen
 			process.stdout.write(
 				ansiEscapes.cursorTo(this.renderPosition.col - 1, this.renderPosition.row - 1) +
@@ -417,12 +432,11 @@ class TerminalJumper {
 			);
 		}
 
-		for (let division of this.divisions) {
+		for (const division of this.divisions) {
 			division._resize(this.termSize, this.renderPosition);
 		}
 
-		this._setDirty();
-		this.render();
+		this.setDirty();
 	}
 
 	_calculateHeight() {

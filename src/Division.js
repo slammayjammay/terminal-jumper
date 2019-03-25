@@ -180,6 +180,22 @@ class Division {
 		this._setDirty();
 	}
 
+	reset() {
+		this._resetDimensions();
+
+		for (const id of this.blockIds) {
+			this.blockHash[id].destroy();
+		}
+
+		this.blockIds = [];
+		this.blockHash = {};
+		this._blockPositions = {};
+		this._uniqueIdCounter = 0;
+		this._prevHeight = null;
+
+		this._setDirty();
+	}
+
 	top() {
 		if (this._top === null) {
 			this._top = this._calculateTop();
@@ -282,7 +298,7 @@ class Division {
 
 			if (scrollX !== this._scrollPosX) {
 				this._scrollPosX = scrollX;
-				this.jumper._setNeedsRender(this);
+				this.jumper.setNeedsRender(this);
 			}
 		}
 
@@ -291,7 +307,7 @@ class Division {
 
 			if (scrollY !== this._scrollPosY) {
 				this._scrollPosY = scrollY;
-				this.jumper._setNeedsRender(this);
+				this.jumper.setNeedsRender(this);
 			}
 		}
 
@@ -375,8 +391,14 @@ class Division {
 
 		// scrollX
 		linesToRender = linesToRender.map(line => {
-			const truncated = sliceAnsi(line, this.scrollPosX(), this.scrollPosX() + this.contentWidth() - 1);
-			const padded = new Array(this.contentWidth() - stripAnsi(truncated).length).join(' ');
+			// slice-ansi is not reliable when styled with multiple colors
+			const truncated = sliceAnsi(
+				line,
+				this.scrollPosX(),
+				this.scrollPosX() + this.contentWidth()
+			) + chalk.reset(' ').replace(' ', '');
+			const length = this.contentWidth() - stripAnsi(truncated).length + 1;
+			const padded = new Array(Math.max(0, length)).join(' ');
 			return truncated + padded;
 		});
 
@@ -441,7 +463,7 @@ class Division {
 
 		const blankLine = new Array(this.width() + 1).join(' ');
 
-		const startLeft = this.renderPosition.col + this.left() - 2;
+		const startLeft = this.renderPosition.col + this.left() - 1;
 		const startTop = this.renderPosition.row + this.top() - 1;
 		let lineIncrement = 0;
 
@@ -648,22 +670,30 @@ class Division {
 
 	_calculateMaxScrollX() {
 		const lineLengths = this.allLines().map(line => {
-			return stripAnsi(line).length - (this.width() - 1);
+			return stripAnsi(line).length - this.width();
 		});
 
 		return Math.max(...lineLengths, 0);
 	}
 
 	_calculateMaxScrollY() {
-		return this.allLines().length - this.height();
+		return Math.max(0, this.allLines().length - this.height());
+	}
+
+	_setNeedsRender(block) {
+		if (block) {
+			this._height = this._allLines = null;
+		}
+
+		this.jumper.setNeedsRender(this);
 	}
 
 	_setDirty() {
-		this.jumper._setDirty(this);
+		this.jumper.setDirty(this);
 	}
 
 	_resetDimensions() {
-		if (this.jumper._isInitiallyRendered) {
+		if (this.jumper.isInitiallyRendered) {
 			this.jumper._internalChain += this.eraseString();
 		}
 
