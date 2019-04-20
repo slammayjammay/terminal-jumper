@@ -8,12 +8,25 @@ const Division = require('./Division');
 const TextBlock = require('./TextBlock');
 
 const DEFAULT_OPTIONS = {
+	/**
+	 * Defaults to one full-width division.
+	 */
 	divisions: [{
 		id: 'default-division',
 		top: 0,
 		left: 0,
 		width: 1
 	}],
+
+	/**
+	 * If true, caps the max height of TerminalJumper to the number of rows minus
+	 * one. The purpose of this is to show the command that prompted the program.
+	 * Set to false if TerminalJumper should cap the max height to the full number
+	 * of rows.
+	 *
+	 * @type {boolean}
+	 */
+	leaveTopRowAvailable: true,
 
 	/**
 	 * Debug mode -- on every render, lists each division's id and colors it to
@@ -101,7 +114,7 @@ class TerminalJumper {
 		this.addDivision(DEFAULT_OPTIONS.divisions[0]);
 	}
 
-	addBlock(targets, text) {
+	addBlock(targets, text, idx) {
 		let division, blockId;
 
 		if (typeof targets === 'string') {
@@ -117,7 +130,7 @@ class TerminalJumper {
 			}
 		}
 
-		return division.addBlock(text, blockId);
+		return division.addBlock(text, blockId, idx);
 	}
 
 	hasBlock(targets) {
@@ -209,17 +222,17 @@ class TerminalJumper {
 		this._resize();
 	}
 
-	render(options = {}) {
+	render() {
 		if (!this.isInitiallyRendered) {
 			this._setupInitialRender();
 		}
 
-		const str = this.renderString(options);
+		const str = this.renderString();
 		this._isChaining ? this._chain += str : process.stdout.write(str);
 		return this;
 	}
 
-	renderString(options = {}) {
+	renderString() {
 		if (!this.isInitiallyRendered) {
 			this._setupInitialRender();
 		}
@@ -247,16 +260,16 @@ class TerminalJumper {
 			division._calculateDimensions(true);
 		}
 
-		const numRowsToAllocate = this.renderPosition.row + height - 1 - this.termSize.rows;
+		const numRowsToAllocate = this.renderPosition.row + height - this.termSize.rows - 1;
 		if (numRowsToAllocate > 0) {
 			writeString += ansiEscapes.cursorTo(0, this.termSize.rows);
 			writeString += new Array(numRowsToAllocate + 1).join('\n');
 			this.renderPosition.row -= numRowsToAllocate;
 		}
 
-		for (let division of needsRenderNodes.map(node => node.division)) {
-			writeString += division.renderString();
-		}
+		needsRenderNodes.sort((a, b) => {
+			return a.division.options.renderOrder <= b.division.options.renderOrder ? -1 : 1;
+		}).forEach(node => writeString += node.division.renderString());
 
 		if (dirtyNodes.length > 0) {
 			this._height = null;
@@ -367,6 +380,10 @@ class TerminalJumper {
 
 	getTermSize() {
 		return termSize();
+	}
+
+	availableHeight() {
+		return this.termSize.rows - (this.options.leaveTopRowAvailable ? 1 : 0);
 	}
 
 	destroy() {

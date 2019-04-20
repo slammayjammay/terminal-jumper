@@ -13,6 +13,7 @@ const SCROLLBAR_HORIZONTAL_FOREGROUND = chalk.white('▁');
 const DEFAULT_OPTIONS = {
 	/**
 	 * The id that TerminalJumper associates with this division.
+	 * @prop {string} id - The id of this division.
 	 */
 	id: null,
 
@@ -30,9 +31,19 @@ const DEFAULT_OPTIONS = {
 
 	/**
 	 * @prop {number|string} - If the id of a division is given, will set the left
-	 * offset of this division to the bottom of the given division.
+	 * offset of this division to the right of the given division.
 	 */
 	left: null,
+
+	/**
+	 * @prop {number|string}
+	 */
+	right: null,
+
+	/**
+	 * @prop {number|string}
+	 */
+	bottom: null,
 
 	/**
 	 * @prop {number}
@@ -52,30 +63,18 @@ const DEFAULT_OPTIONS = {
 	overflowX: 'wrap',
 
 	/**
-	 * @prop {object} scrollBarX -- sets the chars for the scroll bar foreground
+	 * @prop {object} scrollBarX - sets the chars for the scroll bar foreground
 	 * and background.
 	 */
 	scrollBarX: false,
 
 	/**
-	 * If set to "auto", the division content determines the division height,
-	 * until the program fills up the entire screen. At that point, the division
-	 * will scroll any content outside of the viewport.
+	 * Determines the order of division renders. Divisions with lower renderOrder
+	 * will be rendered first. Note that this does not guarantee display order.
 	 *
-	 * @prop {string} overflowY - "auto|scroll".
+	 * @prop {number} renderOrder - the display order for this division.
 	 */
-	overflowY: 'auto',
-
-	/**
-	 * @prop {object} scrollBarY -- sets the chars for the scroll bar foreground
-	 * and background.
-	 */
-	scrollBarY: false,
-
-	/**
-	 * @propt {boolean} wrapOnWord - Wrap on word breaks.
-	 */
-	wrapOnWord: true
+	renderOrder: 0
 };
 
 class Division {
@@ -134,13 +133,13 @@ class Division {
 		return parsedOptions;
 	}
 
-	addBlock(text, id) {
+	addBlock(text, id, idx) {
 		if (!id) {
 			id = id || `block-${this._uniqueIdCounter++}`;
 		}
 
 		const block = new TextBlock(text);
-		this._addBlock(block, id);
+		this._addBlock(block, id, idx);
 
 		return block;
 	}
@@ -182,6 +181,7 @@ class Division {
 
 	reset() {
 		this._resetDimensions();
+		this._scrollPosX = this._scrollPosY = 0;
 
 		for (const id of this.blockIds) {
 			this.blockHash[id].destroy();
@@ -212,6 +212,14 @@ class Division {
 		return this._left;
 	}
 
+	right() {
+		return this.left() + this.width();
+	}
+
+	bottom() {
+		return this.top() + this.height();
+	}
+
 	width() {
 		if (this._width === null) {
 			this._width = this._calculateWidth();
@@ -233,6 +241,7 @@ class Division {
 			this._height = this.jumper.height();
 		} else if (this._height === null) {
 			this._height = this._calculateHeight();
+			this._constrainHeight();
 			this._maxScrollY = null;
 		}
 
@@ -247,7 +256,7 @@ class Division {
 			return this.height();
 		}
 
-		const availableSpace = this.termSize.rows - 1 - this.top() - this.height();
+		const availableSpace = this.jumper.availableHeight() - this.top() - this.height();
 		return this.height() - (availableSpace > 0 ? 0 : 1);
 	}
 
@@ -574,24 +583,28 @@ class Division {
 	 *
 	 * Steps:
 	 *   - populates `this._allLines`
-	 *   - calculates top
-	 *   - calculates left
 	 *   - calculates width
 	 *   - calculates height (depends on `this._allLines`)
+	 *   - calculates top (depends on height)
+	 *   - calculates left (depends on width)
+	 *   - constrain height if extends beyond bounds of terminal
 	 *   - sets position of each block (depends on "top" and "left")
 	 *   - calculates maxScrollX (depends on `this._allLines` and "width")
 	 *   - calculates maxScrollY (depends on `this._allLines` and "height")
-	 *   - Adjust width/height based on whether scroll bars are present
+	 *   - adjust width/height based on whether scroll bars are present
 	 */
 	_calculateDimensions(force) {
 		if (force || this._allLines === null) this._populateLines();
-		if (force || this._top === null) this._top = this._calculateTop();
-		if (force || this._left === null) this._left = this._calculateLeft();
 		if (force || this._width === null) this._width = this._calculateWidth();
 
 		if (this.options.height !== 'full' && (force || this._height === null)) {
 			this._height = this._calculateHeight();
 		}
+
+		if (force || this._top === null) this._top = this._calculateTop();
+		if (force || this._left === null) this._left = this._calculateLeft();
+
+		this._constrainHeight();
 
 		if (force || this._maxScrollX === null) {
 			this._maxScrollX = this._calculateMaxScrollX();
@@ -605,7 +618,7 @@ class Division {
 		const hasScrollBarX = this.hasScrollBarX();
 		const hasScrollBarY = this.hasScrollBarY();
 
-		if (hasScrollBarX && (this.top() + this.height() >= this.termSize.rows - 1)) {
+		if (hasScrollBarX && (this.top() + this.height() >= this.jumper.availableHeight())) {
 			this._maxScrollY += 1;
 		}
 		if (hasScrollBarY && this._maxScrollX > 0) {
@@ -615,39 +628,80 @@ class Division {
 
 	_calculateTop() {
 		if (typeof this.options.top === 'string') {
-			const targetDivision = this.jumper.getDivision(this.options.top);
-			return targetDivision.top() + targetDivision.height();
-		} else {
-			return ~~(this.options.top * this.termSize.rows);
+			return this.jumper.getDivision(this.options.top).bottom();
+		} else if (typeof this.options.top === 'number') {
+			return ~~(this.options.top * this.jumper.availableHeight());
 		}
+
+		if (typeof this.options.bottom === 'string') {
+			return this.jumper.getDivision(this.options.bottom).top();
+		} else if (typeof this.options.bottom === 'number') {
+			return Math.max(0, this.jumper.availableHeight() - this.height());
+		}
+
+		throw new Error(`Could not calculate top offset for "${this.options.id}".`);
 	}
 
 	_calculateLeft() {
 		if (typeof this.options.left === 'string') {
-			const targetDivision = this.jumper.getDivision(this.options.left);
-			return targetDivision.left() + targetDivision.width();
-		} else {
+			return this.jumper.getDivision(this.options.left).right();
+		} else if (typeof this.options.left === 'number') {
 			return ~~(this.options.left * this.termSize.columns);
 		}
+
+		if (typeof this.options.right === 'string') {
+			return this.jumper.getDivision(this.options.right).left();
+		} else if (typeof this.options.right === 'number') {
+			return ~~((1 - this.options.right) * this.termSize.columns - this.width());
+		}
+
+		throw new Error(`Could not calculate left offset for "${this.options.id}".`);
 	}
 
 	_calculateWidth() {
 		return ~~(this.options.width * this.termSize.columns);
 	}
 
+	/**
+	 * There is a circular dependency problem when we need to calculate both the
+	 * height and the top offset. In order to avoid overflowing the terminal
+	 * window, we need to max out the height at some point (which is dependent on
+	 * the top offset of the div). However, if `options.bottom` is given, then the
+	 * top offset is dependent on the height (number of terminal rows minus the
+	 * height).
+	 *
+	 * Solution: `_calculateHeight` will return `allLines().length`, even if it
+	 * overflows the terminal window. Afterward, `_constrainHeight` needs to be
+	 * called to avoid the overflow (this will depend on the top offset). And
+	 * between the two, the top offset will be calculated. It will possibly be
+	 * using an incorrect height (too large), but the only problem that can arise
+	 * is that the top offset is negative, so it will have a minimum of 0.
+	 *
+	 * 1) Calculate, but do not clamp, height
+	 * 2) Calculate top offset if necessary
+	 * 3) Constrain height -- must always be called after calculating height
+	 */
 	_calculateHeight() {
 		if (typeof this.options.height === 'number') {
-			return ~~(this.options.height * this.termSize.rows);
+			return ~~(this.options.height * this.jumper.availableHeight());
 		}
 
-		let height = this.allLines().length;
+		return this.allLines().length;
+	}
 
-		// if division fills up viewport height, convert to scroll
-		if (this.top() + height > this.termSize.rows - 1) {
-			height = this.termSize.rows - 1 - this.top();
+	/**
+	 * Prevents any/all divisions from overflowing the height of the terminal.
+	 * Calculates top offset if not done already.
+	 */
+	_constrainHeight() {
+		if (this._height === null) {
+			throw new Error(`Internal error: height must be calculated before it can be constrained.`);
+		}
+		if (this._top === null) {
+			this._top = this._calculateTop();
 		}
 
-		return height;
+		this._height = Math.min(this._height, this.jumper.availableHeight() - this.top());
 	}
 
 	_populateLines() {
@@ -711,11 +765,8 @@ class Division {
 		this.renderPosition = renderPosition;
 	}
 
-	/**
-	 * TODO: make option to insert blocks instead of just appending them
-	 */
-	_addBlock(block, id) {
-		this.blockIds.push(id);
+	_addBlock(block, id, idx = this.blockIds.length) {
+		this.blockIds.splice(idx, 0, id);
 		this.blockHash[id] = block;
 		this._blockPositions[id] = { row: null, col: null };
 		block.division = this;

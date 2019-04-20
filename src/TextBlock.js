@@ -27,6 +27,11 @@ class TextBlock {
 	 * @return {TextBlock}
 	 */
 	content(text) {
+		// try to force convert to string
+		if (typeof text !== 'string') {
+			text += '';
+		}
+
 		text = text.replace(/\t/g, TAB_FAKER);
 
 		const escaped = stripAnsi(text);
