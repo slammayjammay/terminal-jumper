@@ -3,6 +3,7 @@ const chalk = require('chalk');
 const wrapAnsi = require('wrap-ansi');
 const stripAnsi = require('strip-ansi');
 const sliceAnsi = require('slice-ansi');
+const evaluator = require('./evaluator');
 const TextBlock = require('./TextBlock');
 
 const SCROLLBAR_VERTICAL_BACKGROUND = chalk.bold.rgb(102, 102, 102)('⎹');
@@ -18,9 +19,15 @@ const DEFAULT_OPTIONS = {
 	id: null,
 
 	/**
-	 * top, left, width are required. Height is optional.
-	 * All of these properties must be between 0 and 1. They are the percentages
-	 * of the terminal viewport. TODO: not this ^
+	 * Width is required. So is left (or right) and top (or bottom). You can
+	 * specify a fixed number of rows or columns by providing a number. Or you can
+	 * provide a percentage of the terminal's dimensions by providing an
+	 * expression string. e.g. "50%" or "75% - 4".
+	 *
+	 * You can align the position of divisions against one another by providing a
+	 * another division's id as top/left/right/bottom. For example if there are 2
+	 * divisions -- `A` with `top: 0`, and `B` with `top: "A"`, B's "top" position
+	 * will be top-aligned against the bottom of A.
 	 */
 
 	/**
@@ -100,13 +107,29 @@ class Division {
 			throw new Error(`Options property "id" must be present.`);
 		}
 
+		// must have a top/bottom position
+		if (
+			!['number', 'string'].includes(typeof options.top) &&
+			!['number', 'string'].includes(typeof options.bottom)
+		) {
+			throw new Error('Must set a top or bottom position.');
+		}
+
+		// must have a left/right position
+		if (
+			!['number', 'string'].includes(typeof options.left) &&
+			!['number', 'string'].includes(typeof options.right)
+		) {
+			throw new Error('Must set a left or right position.');
+		}
+
 		// must have a width
-		if (typeof options.width !== 'number') {
-			throw new Error(`Options property "width" must be a number between 0 and 1.`);
+		if (!['number', 'string'].includes(typeof options.width)) {
+			throw new Error('Options property "width" must be given.');
 		}
 
 		// if vertical scroll, must have explicit height
-		if (options.overflowY === 'scroll' && typeof options.height !== 'number') {
+		if (options.overflowY === 'scroll' && !['number', 'string'].includes(typeof options.height)) {
 			throw new Error('Must set division height when overflowY is "scroll".');
 		}
 
@@ -626,40 +649,53 @@ class Division {
 		}
 	}
 
+	/**
+	 * Wrapper helper for `evaluator.evaluate`. Floors values.
+	 */
+	evaluate(expression, fnOrObj) {
+		return ~~(evaluator.evaluate(expression, fnOrObj));
+	}
+
 	_calculateTop() {
-		if (typeof this.options.top === 'string') {
-			return this.jumper.getDivision(this.options.top).bottom();
-		} else if (typeof this.options.top === 'number') {
-			return ~~(this.options.top * this.jumper.availableHeight());
+		const { id, top, bottom } = this.options;
+
+		if (typeof top === 'string' && this.jumper.hasDivision(top)) {
+			return this.jumper.getDivision(top).bottom();
+		} else if (['string', 'number'].includes(typeof top)) {
+			return this.evaluate(top, { '%': this.jumper.availableHeight() });
 		}
 
-		if (typeof this.options.bottom === 'string') {
-			return this.jumper.getDivision(this.options.bottom).top();
-		} else if (typeof this.options.bottom === 'number') {
-			return Math.max(0, this.jumper.availableHeight() - this.height());
+		if (typeof bottom === 'string' && this.jumper.hasDivision(bottom)) {
+			return this.jumper.getDivision(bottom).top();
+		} else if (['string', 'number'].includes(typeof bottom)) {
+			const val = this.evaluate(bottom, { '%': this.jumper.availableHeight() });
+			return this.jumper.availableHeight() - this.height() - val;
 		}
 
-		throw new Error(`Could not calculate top offset for "${this.options.id}".`);
+		throw new Error(`Could not calculate top offset for "${id}".`);
 	}
 
 	_calculateLeft() {
-		if (typeof this.options.left === 'string') {
-			return this.jumper.getDivision(this.options.left).right();
-		} else if (typeof this.options.left === 'number') {
-			return ~~(this.options.left * this.termSize.columns);
+		const { id, left, right } = this.options;
+
+		if (typeof left === 'string' && this.jumper.hasDivision(left)) {
+			return this.jumper.getDivision(left).right();
+		} else if (['string', 'number'].includes(typeof left)) {
+			return this.evaluate(left, { '%': this.width() });
 		}
 
-		if (typeof this.options.right === 'string') {
-			return this.jumper.getDivision(this.options.right).left();
-		} else if (typeof this.options.right === 'number') {
-			return ~~((1 - this.options.right) * this.termSize.columns - this.width());
+		if (typeof right === 'string' && this.jumper.hasDivision(right)) {
+			return this.jumper.getDivision(right).left();
+		} else if (['string', 'number'].includes(typeof right)) {
+			const val = this.evaluate(right, { '%': this.width() });
+			return this.jumper.width() - this.width() - val;
 		}
 
-		throw new Error(`Could not calculate left offset for "${this.options.id}".`);
+		throw new Error(`Could not calculate left offset for "${id}".`);
 	}
 
 	_calculateWidth() {
-		return ~~(this.options.width * this.termSize.columns);
+		return this.evaluate(this.options.width, { '%': this.jumper.width() });
 	}
 
 	/**
@@ -682,8 +718,8 @@ class Division {
 	 * 3) Constrain height -- must always be called after calculating height
 	 */
 	_calculateHeight() {
-		if (typeof this.options.height === 'number') {
-			return ~~(this.options.height * this.jumper.availableHeight());
+		if (this.options.height) {
+			return this.evaluate(this.options.height);
 		}
 
 		return this.allLines().length;

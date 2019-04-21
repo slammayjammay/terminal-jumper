@@ -3,6 +3,9 @@
   "version": "1.2.2",
   "description": "Terminal rendering system for interactive programs.",
   "main": "src/index.js",
+  "scripts": {
+    "test": "mocha test/evaluator.js || true"
+  },
   "keywords": [
     "terminal",
     "render",
@@ -25,5 +28,9 @@
     "strip-ansi": "^5.2.0",
     "term-size": "^1.2.0",
     "wrap-ansi": "^5.0.0"
+  },
+  "devDependencies": {
+    "chai": "^4.2.0",
+    "mocha": "^6.1.4"
   }
 }

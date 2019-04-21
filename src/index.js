@@ -15,7 +15,7 @@ const DEFAULT_OPTIONS = {
 		id: 'default-division',
 		top: 0,
 		left: 0,
-		width: 1
+		width: '100%'
 	}],
 
 	/**
@@ -88,11 +88,23 @@ class TerminalJumper {
 
 		this.tree.addDivision(division);
 
+		this.setDirty();
+
 		return division;
 	}
 
 	getDivision(id) {
-		return this.divisionsHash[id];
+		const division = this.divisionsHash[id];
+
+		if (!division) {
+			throw new Error(`Could not find division "${id}".`);
+		}
+
+		return division;
+	}
+
+	hasDivision(id) {
+		return !!this.divisionsHash[id];
 	}
 
 	removeDivision(division) {
@@ -107,6 +119,8 @@ class TerminalJumper {
 		this.divisions.splice(this.divisions.indexOf(division), 1);
 
 		this.tree.removeDivision(division);
+
+		this.setDirty();
 	}
 
 	reset() {
@@ -175,9 +189,19 @@ class TerminalJumper {
 		return this.getDivision(divisionId).removeBlock(blockId);
 	}
 
+	width(division) {
+		if (division) {
+			if (typeof division === 'string') division = this.getDivision(division);
+			return division.width();
+		}
+
+		return this.termSize.columns;
+	}
+
 	height(division) {
-		if (typeof division === 'string') {
-			return this.getDivision(divisionId).height();
+		if (division) {
+			if (typeof division === 'string') division = this.getDivision(division);
+			return division.height();
 		}
 
 		if (this._height === null) {
