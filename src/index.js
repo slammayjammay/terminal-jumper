@@ -522,13 +522,15 @@ class TerminalJumper {
 
 	_addDebugDivision(options) {
 		if (typeof options !== 'object') {
-			options = {
-				id: this._debugDivisionId,
-				width: 0.25,
-				left: 0.75,
-				top: 0
-			};
+			options = {};
 		}
+
+		options = Object.assign({}, {
+			id: this._debugDivisionId,
+			width: '40%',
+			bottom: 0,
+			right: 0
+		}, options);
 
 		const divisionsToMonitor = this.divisions.slice();
 
