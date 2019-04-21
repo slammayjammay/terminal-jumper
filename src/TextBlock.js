@@ -2,6 +2,7 @@ const ansiEscapes = require('ansi-escapes');
 const stripAnsi = require('strip-ansi');
 const sliceAnsi = require('slice-ansi');
 const wrapAnsi = require('wrap-ansi');
+const stringWidth = require('string-width');
 
 // in order to calculate height correctly, translate tab characters into spaces.
 // this way we can check if `string.length` is more than `process.sdtout.columns`
@@ -35,7 +36,7 @@ class TextBlock {
 		text = text.replace(/\t/g, TAB_FAKER);
 
 		const escaped = stripAnsi(text);
-		const hasChanged = escaped !== this.escapedText;
+		const hasChanged = stringWidth(escaped) !== stringWidth(this.escapedText);
 
 		this.text = text;
 		this.escapedText = escaped;
