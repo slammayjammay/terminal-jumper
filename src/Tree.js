@@ -44,6 +44,9 @@ class Tree {
 	}
 
 	removeDivision(division) {
+		const node = this.nodes[division.options.id];
+		node.parent.children.splice(node.parent.children.indexOf(node), 1);
+
 		delete this.nodes[division.options.id];
 		delete this._dirtyNodes[division.options.id];
 		delete this._needsRenderNodes[division.options.id];
