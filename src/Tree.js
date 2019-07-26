@@ -5,7 +5,9 @@ const Division = require('./Division');
  * recalculations and which divisions depend on dimensions of another division.
  */
 class Tree {
-	constructor() {
+	constructor(jumper) {
+		this.jumper = jumper;
+		// TODO: this is bad. do graph instead
 		this.tree = { depth: 0, parent: null, children: [] };
 		this.nodes = {};
 		this._dirtyNodes = {};
@@ -16,22 +18,22 @@ class Tree {
 		const node = { division, children: [], depth: 0, parent: null };
 
 		const parentNode = (() => {
-			const topDepends = typeof division.options.top === 'string';
-			const leftDepends = typeof division.options.left === 'string';
+			let parent = this.tree;
 
-			if (!topDepends && !leftDepends) {
-				return this.tree;
+			for (const prop of ['top', 'left', 'right', 'bottom']) {
+				const dependentId = this._getDependentDivisionId(division.options[prop]);
+				if (!dependentId || !this.nodes[dependentId]) {
+					continue;
+				}
+
+				const dependent = this.nodes[dependentId];
+
+				if (dependent.depth > parent.depth) {
+					parent = dependent;
+				}
 			}
 
-			// if this division depends on two other divisions, set it as a child
-			// of whichever division is further down the tree
-			const topNode = this.nodes[division.options.top];
-			const topDepth = (topNode && topNode.depth) || -1;
-
-			const leftNode = this.nodes[division.options.left];
-			const leftDepth = (leftNode && leftNode.depth) || -1;
-
-			return topDepth > leftDepth ? topNode : leftNode;
+			return parent;
 		})();
 
 		node.depth = parentNode.depth + 1;
@@ -41,6 +43,19 @@ class Tree {
 		this.nodes[division.options.id] = node;
 		this._dirtyNodes[division.options.id] = node;
 		this._needsRenderNodes[division.options.id] = node;
+	}
+
+	_getDependentDivisionId(str) {
+		if (typeof str !== 'string') {
+			return false;
+		}
+
+		if (this.jumper.hasDivision(str)) {
+			return str;
+		}
+
+		const match = /\{(.*)\}/.exec(str);
+		return match && match[1];
 	}
 
 	removeDivision(division) {
@@ -117,7 +132,7 @@ class Tree {
 	}
 
 	destroy() {
-		this.tree = this.nodes = this._dirtyNodes = this._needsRenderNodes = null;
+		this.jumper = this.tree = this.nodes = this._dirtyNodes = this._needsRenderNodes = null;
 	}
 }
 

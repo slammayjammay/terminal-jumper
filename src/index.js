@@ -10,6 +10,7 @@ const TextBlock = require('./TextBlock');
 const DEFAULT_OPTIONS = {
 	/**
 	 * Defaults to one full-width division.
+	 * TODO: do not add this on instantiation.
 	 */
 	divisions: [{
 		id: 'default-division',
@@ -65,7 +66,7 @@ class TerminalJumper {
 		this.divisionsHash = {};
 		this.divisions = [];
 
-		this.tree = new Tree();
+		this.tree = new Tree(this);
 		this.options.divisions.forEach(options => this.addDivision(options));
 
 		if (this.options.debug) {
@@ -75,20 +76,26 @@ class TerminalJumper {
 		process.stdout.on('resize', this._onResizeDebounced);
 	}
 
-	addDivision(options) {
-		const id = options.id || `division-${this._uniqueIdCounter++}`;
+	/**
+	 * @param {Division|object} division - Either a Division object or a
+	 * divisions options object.
+	 * @return {Division} - a division options object.
+	 */
+	addDivision(division) {
+		if (!(division instanceof Division)) {
+			division = new Division(division);
+		}
 
-		const division = new Division(options);
 		division.jumper = this;
 		division.termSize = this.termSize;
 		division.renderPosition = this.renderPosition;
 
+		const id = division.options.id || `division-${this._uniqueIdCounter++}`;
 		this.divisionsHash[id] = division;
 		this.divisions.push(division);
 
 		this.tree.addDivision(division);
-
-		this.setDirty();
+		this.setDirty(division);
 
 		return division;
 	}
@@ -114,6 +121,8 @@ class TerminalJumper {
 		} else if (typeof division === 'string') {
 			division = this.getDivision(division);
 		}
+
+		this.tree.setDirty(division);
 
 		delete this.divisionsHash[division.options.id];
 		this.divisions.splice(this.divisions.indexOf(division), 1);
@@ -253,6 +262,7 @@ class TerminalJumper {
 
 		const str = this.renderString();
 		this._isChaining ? this._chain += str : process.stdout.write(str);
+
 		return this;
 	}
 
@@ -406,7 +416,7 @@ class TerminalJumper {
 		return termSize();
 	}
 
-	availableHeight() {
+	getAvailableHeight() {
 		return this.termSize.rows - (this.options.leaveTopRowAvailable ? 1 : 0);
 	}
 
@@ -578,9 +588,9 @@ class TerminalJumper {
 			[allNodes, 'white']
 		];
 
-		let startNode; // correct spacing when showing dirty node hierarchy
-
 		for (let [nodeTypes, color] of map) {
+			let startNode; // correct spacing when showing dirty node hierarchy
+
 			for (let node of nodeTypes) {
 				if (processed[node.division.options.id]) {
 					continue;
@@ -594,15 +604,9 @@ class TerminalJumper {
 					this.getBlock(targets).remove();
 				}
 
-				let text;
-
-				if (nodeTypes === dirtyNodes) {
-					const spacing = new Array(node.depth - startNode.depth + 1).join(' ');
-					text = `${spacing}${spacing ? '↳' : ''}${chalk.red(node.division.options.id)}`;
-				} else {
-					text = node.division.options.id;
-				}
-
+				const spacing = new Array(node.depth - startNode.depth + 1).join(' ');
+				const str = `${spacing}${spacing ? '↳' : ''}${node.division.options.id}`;
+				const text = chalk[color](str);
 				this.addBlock(targets, text);
 			}
 		}
@@ -627,4 +631,4 @@ class TerminalJumper {
 	}
 }
 
-module.exports = TerminalJumper
+module.exports = TerminalJumper;

@@ -25,9 +25,17 @@ const DEFAULT_OPTIONS = {
 	 * expression string. e.g. "50%" or "75% - 4".
 	 *
 	 * You can align the position of divisions against one another by providing a
-	 * another division's id as top/left/right/bottom. For example if there are 2
-	 * divisions -- `A` with `top: 0`, and `B` with `top: "A"`, B's "top" position
-	 * will be top-aligned against the bottom of A.
+	 * another division's id as top/left/right/bottom value. For example if there
+	 * are 2 divisions -- `A` with `top: 0`, and `B` with `top: "A"`, B's "top"
+	 * position will be top-aligned against the bottom of A.
+	 *
+	 * Division ids present in evaluation strings need to be surrounded with one
+	 * set of curly braces. These will then be replaced by the value associated
+	 * with the id, depending on the context. For example if you wanted to top
+	 * align one division against the bottom of another and add a 5 row gap:
+	 * `top: "{id-to-top-align-against} + 5"`
+	 * Here the id and curly braces will be replaced by the row position of the
+	 * bottom of the division with id "id-to-top-align-against".
 	 */
 
 	/**
@@ -279,7 +287,7 @@ class Division {
 			return this.height();
 		}
 
-		const availableSpace = this.jumper.availableHeight() - this.top() - this.height();
+		const availableSpace = this.jumper.getAvailableHeight() - this.top() - this.height();
 		return this.height() - (availableSpace > 0 ? 0 : 1);
 	}
 
@@ -641,7 +649,7 @@ class Division {
 		const hasScrollBarX = this.hasScrollBarX();
 		const hasScrollBarY = this.hasScrollBarY();
 
-		if (hasScrollBarX && (this.top() + this.height() >= this.jumper.availableHeight())) {
+		if (hasScrollBarX && (this.top() + this.height() >= this.jumper.getAvailableHeight())) {
 			this._maxScrollY += 1;
 		}
 		if (hasScrollBarY && this._maxScrollX > 0) {
@@ -656,42 +664,64 @@ class Division {
 		return ~~(evaluator.evaluate(expression, fnOrObj));
 	}
 
+	/**
+	 * @param {string} string - The evaluation string.
+	 * @param {function} cb - The callback function, called with the found id,
+	 * that returns the value to replace the id with.
+	 */
+	_replaceId(string, cb) {
+		return string.replace(/\{(.*)\}/, (_, id) => {
+			if (!this.jumper.hasDivision(id)) {
+				throw new Error(`Id "${id}" not found (from expression "${string}").`);
+			}
+			return cb(id);
+		});
+	}
+
 	_calculateTop() {
-		const { id, top, bottom } = this.options;
+		let { top, bottom } = this.options;
 
-		if (typeof top === 'string' && this.jumper.hasDivision(top)) {
-			return this.jumper.getDivision(top).bottom();
-		} else if (['string', 'number'].includes(typeof top)) {
-			return this.evaluate(top, { '%': this.jumper.availableHeight() });
+		const isTop = top !== null;
+		const prop = isTop ? top : bottom;
+		const getAligned = (id) => {
+			return this.jumper.getDivision(id)[isTop ? 'bottom' : 'top']();
+		};
+
+		let expr = prop;
+		// option points to a division id
+		if (this.jumper.hasDivision(prop)) expr = getAligned(prop);
+		// option points to an expression containing a division id
+		else if (typeof prop === 'string') expr = this._replaceId(prop, getAligned);
+
+		let val = this.evaluate(expr, { '%': this.jumper.getAvailableHeight() });
+		if (!isTop) {
+			val = this.jumper.getAvailableHeight() - this.height() - val;
 		}
 
-		if (typeof bottom === 'string' && this.jumper.hasDivision(bottom)) {
-			return this.jumper.getDivision(bottom).top();
-		} else if (['string', 'number'].includes(typeof bottom)) {
-			const val = this.evaluate(bottom, { '%': this.jumper.availableHeight() });
-			return this.jumper.availableHeight() - this.height() - val;
-		}
-
-		throw new Error(`Could not calculate top offset for "${id}".`);
+		return val;
 	}
 
 	_calculateLeft() {
-		const { id, left, right } = this.options;
+		let { left, right } = this.options;
 
-		if (typeof left === 'string' && this.jumper.hasDivision(left)) {
-			return this.jumper.getDivision(left).right();
-		} else if (['string', 'number'].includes(typeof left)) {
-			return this.evaluate(left, { '%': this.width() });
+		const isLeft = left !== null;
+		const prop = isLeft ? left : right;
+		const getAligned = (id) => {
+			return this.jumper.getDivision(id)[isLeft ? 'right' : 'left']();
+		};
+
+		let expr = prop;
+		// option points to a division id
+		if (this.jumper.hasDivision(prop)) expr = getAligned(prop);
+		// option points to an expression containing a division id
+		else if (typeof prop === 'string') expr = this._replaceId(prop, getAligned);
+
+		let val = this.evaluate(expr, { '%': this.width() });
+		if (!isLeft) {
+			val = this.jumper.width() - this.width() - val;
 		}
 
-		if (typeof right === 'string' && this.jumper.hasDivision(right)) {
-			return this.jumper.getDivision(right).left();
-		} else if (['string', 'number'].includes(typeof right)) {
-			const val = this.evaluate(right, { '%': this.width() });
-			return this.jumper.width() - this.width() - val;
-		}
-
-		throw new Error(`Could not calculate left offset for "${id}".`);
+		return val;
 	}
 
 	_calculateWidth() {
@@ -719,7 +749,7 @@ class Division {
 	 */
 	_calculateHeight() {
 		if (this.options.height) {
-			return this.evaluate(this.options.height);
+			return this.evaluate(this.options.height, { '%': this.jumper.getAvailableHeight() });
 		}
 
 		return this.allLines().length;
@@ -737,7 +767,7 @@ class Division {
 			this._top = this._calculateTop();
 		}
 
-		this._height = Math.min(this._height, this.jumper.availableHeight() - this.top());
+		this._height = Math.min(this._height, this.jumper.getAvailableHeight() - this.top());
 	}
 
 	_populateLines() {
