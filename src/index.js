@@ -56,7 +56,6 @@ class TerminalJumper {
 		this.isInitiallyRendered = false; // have we rendered once already?
 		this._isChaining = false; // is writing to a string, or stdout directly?
 		this._chain = ''; // internal string, to be written to stdout (API use)
-		this._internalChain = ''; // internal string, (internal use)
 		this._uniqueIdCounter = 0; // counter for unique division id
 		this._bottomDivision = this._topDivision = null; // store top and bottom divisions
 		this._debugDivisionId = 'debug'; // id for debug division
@@ -65,6 +64,8 @@ class TerminalJumper {
 
 		this.divisionsHash = {};
 		this.divisions = [];
+
+		this.forNextRender = new Map();
 
 		this.tree = new Tree(this);
 		this.options.divisions.forEach(options => this.addDivision(options));
@@ -272,8 +273,11 @@ class TerminalJumper {
 		}
 
 		let writeString = '';
-		writeString += this._internalChain;
-		this._internalChain = '';
+
+		for (const string of this.forNextRender.values()) {
+			writeString += string;
+		}
+		this.forNextRender.clear();
 
 		// set full height divs
 		const height = this.height();

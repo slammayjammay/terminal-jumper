@@ -814,7 +814,7 @@ class Division {
 
 	_resetDimensions() {
 		if (this.jumper.isInitiallyRendered) {
-			this.jumper._internalChain += this.eraseString();
+			this.jumper.forNextRender.set(`erase-${this.options.id}`, this.eraseString());
 		}
 
 		this._top = this._left = this._width = null;
