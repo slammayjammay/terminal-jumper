@@ -274,8 +274,8 @@ class TerminalJumper {
 
 		let writeString = '';
 
-		for (const string of this.forNextRender.values()) {
-			writeString += string;
+		for (const val of this.forNextRender.values()) {
+			writeString += (typeof val === 'function') ? (val() || '') : val;
 		}
 		this.forNextRender.clear();
 
