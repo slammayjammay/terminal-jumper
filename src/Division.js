@@ -106,7 +106,7 @@ class Division {
 		this.blockHash = {};
 		this._blockPositions = {};
 		this._uniqueIdCounter = 0;
-		this._prevHeight = null;
+		this._lastRenderCache = {};
 	}
 
 	_parseOptions(options) {
@@ -211,7 +211,7 @@ class Division {
 	}
 
 	reset() {
-		this._resetDimensions();
+		this._setDirty();
 		this._scrollPosX = this._scrollPosY = 0;
 
 		for (const id of this.blockIds) {
@@ -222,9 +222,7 @@ class Division {
 		this.blockHash = {};
 		this._blockPositions = {};
 		this._uniqueIdCounter = 0;
-		this._prevHeight = null;
-
-		this._setDirty();
+		this._lastRenderCache = {};
 	}
 
 	top() {
@@ -482,40 +480,55 @@ class Division {
 		const startTop = this.renderPosition.row + this.top() - 1;
 		let lineIncrement = 0;
 
-		for (let line of linesToRender) {
+		for (const line of linesToRender) {
 			renderString += ansiEscapes.cursorTo(startLeft, startTop + lineIncrement);
 			renderString += line;
 			lineIncrement += 1;
 		}
 
-		this._prevHeight = this.height() + (this.hasScrollBarX() ? 1 : 0);
+		this._lastRenderCache = {
+			startTop,
+			startLeft,
+			width: this.width(),
+			height: this.height()
+		};
 
 		return renderString;
 	}
 
 	erase() {
-		process.stdout.write(this.eraseString());
+		process.stdout.write(this.eraseString(...arguments));
 		return this;
 	}
 
-	eraseString() {
+	/**
+	 * @param {object} [cache] - The values used when this division last rendered.
+	 */
+	eraseString(cache = { ...this._lastRenderCache }) {
 		let writeString = '';
 
-		const blankLine = new Array(this.width() + 1).join(' ');
+		for (const value of ['startLeft', 'startTop', 'width', 'height']) {
+			cache[value] = Number.isInteger(cache[value]) ? cache[value] : null;
+		}
 
-		const startLeft = this.renderPosition.col + this.left() - 1;
-		const startTop = this.renderPosition.row + this.top() - 1;
-		let lineIncrement = 0;
+		const startLeft = cache.startLeft || this.renderPosition.col + this.left() - 1;
+		const startTop = cache.startTop || this.renderPosition.row + this.top() - 1;
+		const width = cache.width || this.width();
+		const height = (() => {
+			if (cache.height) {
+				return cache.height;
+			} else if (this.options.height === 'full') {
+				return this.jumper.height() - this.top();
+			} else {
+				return this.height();
+			}
+		})();
+
+		const blankLine = new Array(width + 1).join(' ');
 
 		writeString += ansiEscapes.cursorTo(startLeft, startTop);
 
-		let height;
-		if (this.options.height === 'full') {
-			height = this.jumper.height() - this.top();
-		} else {
-			height = this._prevHeight ? this._prevHeight : this.height();
-		}
-
+		let lineIncrement = 0;
 		for (let i = 0; i < height; i++) {
 			writeString += ansiEscapes.cursorTo(startLeft, startTop + lineIncrement);
 			writeString += blankLine;
@@ -602,6 +615,7 @@ class Division {
 		this.options = null;
 		this._allLines = null;
 		this.blockIds = this.blockHash = this._blockPositions = null;
+		this._lastRenderCache = null;
 
 		this.jumper = null;
 		this.termSize = this.renderPositions = null;
@@ -814,7 +828,10 @@ class Division {
 
 	_resetDimensions() {
 		if (this.jumper.isInitiallyRendered) {
-			this.jumper.forNextRender.set(`erase-${this.options.id}`, this.eraseString());
+			const cache = this._lastRenderCache;
+			this.jumper.forNextRender.set(`erase-${this.options.id}`, () => {
+				return this.eraseString(cache);
+			});
 		}
 
 		this._top = this._left = this._width = null;
