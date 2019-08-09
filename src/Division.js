@@ -222,7 +222,6 @@ class Division {
 		this.blockHash = {};
 		this._blockPositions = {};
 		this._uniqueIdCounter = 0;
-		this._lastRenderCache = {};
 	}
 
 	top() {
@@ -828,9 +827,8 @@ class Division {
 
 	_resetDimensions() {
 		if (this.jumper.isInitiallyRendered) {
-			const cache = this._lastRenderCache;
 			this.jumper.forNextRender.set(`erase-${this.options.id}`, () => {
-				return this.eraseString(cache);
+				return this.eraseString();
 			});
 		}
 
