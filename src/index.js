@@ -306,7 +306,7 @@ class TerminalJumper {
 		}
 
 		needsRenderNodes.sort((a, b) => {
-			return a.division.options.renderOrder <= b.division.options.renderOrder ? -1 : 1;
+			return a.division.options.renderOrder - b.division.options.renderOrder;
 		}).forEach(node => writeString += node.division.renderString());
 
 		if (dirtyNodes.length > 0) {
