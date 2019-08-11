@@ -3,7 +3,7 @@ const termSize = require('term-size');
 const chalk = require('chalk');
 const ansiEscapes = require('ansi-escapes');
 const getCursorPosition = require('get-cursor-position');
-const Tree = require('./Tree'); // TODO: rename
+const Graph = require('./Graph'); // TODO: rename
 const Division = require('./Division');
 const TextBlock = require('./TextBlock');
 
@@ -65,7 +65,7 @@ class TerminalJumper {
 		this.divisions = [];
 
 		this.forNextRender = new Map();
-		this.tree = new Tree();
+		this.graph = new Graph();
 
 		this.addDivision(this.options.divisions);
 
@@ -131,7 +131,7 @@ class TerminalJumper {
 			division = this.getDivision(division);
 		}
 
-		this.tree.setDirty(division);
+		this.graph.setDirty(division);
 
 		delete this.divisionsHash[division.options.id];
 		this.divisions.splice(this.divisions.indexOf(division), 1);
@@ -257,8 +257,8 @@ class TerminalJumper {
 	}
 
 	calculateGraph() {
-		this.tree.setDivisions(this.divisions);
-		this.tree.calculateGraph();
+		this.graph.setDivisions(this.divisions);
+		this.graph.calculateGraph();
 	}
 
 	_setupInitialRender() {
@@ -300,7 +300,7 @@ class TerminalJumper {
 			this._renderDebugDivision({ dirtyNodes, needsRenderNodes });
 		}
 
-		for (const { division } of this.tree.dirtyNodes.values()) {
+		for (const { division } of this.graph.dirtyNodes.values()) {
 			division._calculateDimensions(true);
 		}
 
@@ -311,12 +311,12 @@ class TerminalJumper {
 			this.renderPosition.row -= numRowsToAllocate;
 		}
 
-		Array.from(this.tree.needsRenderNodes.values()).sort((a, b) => {
+		Array.from(this.graph.needsRenderNodes.values()).sort((a, b) => {
 			return a.division.options.renderOrder - b.division.options.renderOrder;
 		}).forEach(node => writeString += node.division.renderString());
 
-		this.tree.dirtyNodes.clear();
-		this.tree.needsRenderNodes.clear();
+		this.graph.dirtyNodes.clear();
+		this.graph.needsRenderNodes.clear();
 
 		return writeString;
 	}
@@ -332,7 +332,7 @@ class TerminalJumper {
 
 		for (let division of this.divisions) {
 			writeString += division.eraseString();
-			this.tree.setNeedsRender(division);
+			this.graph.setNeedsRender(division);
 		}
 
 		const [x, y] = [this.renderPosition.col - 1, this.renderPosition.row - 1];
@@ -430,7 +430,7 @@ class TerminalJumper {
 	}
 
 	destroy() {
-		this.tree.destroy();
+		this.graph.destroy();
 
 		for (let division of this.divisions) {
 			division.destroy();
@@ -465,7 +465,7 @@ class TerminalJumper {
 		}
 
 		this._height = null;
-		this.tree.setDirty(division);
+		this.graph.setDirty(division);
 	}
 
 	setNeedsRender(division) {
@@ -473,7 +473,7 @@ class TerminalJumper {
 			division = this.getDivision(division);
 		}
 
-		this.tree.setNeedsRender(division);
+		this.graph.setNeedsRender(division);
 	}
 
 	_onResizeDebounced() {
@@ -519,7 +519,7 @@ class TerminalJumper {
 	_setFullHeightDivs(height) {
 		for (const div of this.divisions.filter(div => div.options.height === 'full')) {
 			div._setHeight(height - div.top());
-			this.tree.setDirty(div);
+			this.graph.setDirty(div);
 		}
 	}
 
@@ -556,14 +556,14 @@ class TerminalJumper {
 	 * WHITE -- division was neither re-calculated nor re-rendered.
 	 *
 	 * @param {object}
-	 * @prop {array} [allNodes] - All nodes in the tree.
-	 * @prop {array} [dirtyNodes] - All dirty nodes in the tree.
-	 * @prop {array} [needsRenderNodes] - All nodes that need rendering in the tree.
+	 * @prop {array} [allNodes] - All nodes in the graph.
+	 * @prop {array} [dirtyNodes] - All dirty nodes in the graph.
+	 * @prop {array} [needsRenderNodes] - All nodes that need rendering in the graph.
 	 */
 	_renderDebugDivision({ dirtyNodes, needsRenderNodes, allNodes }) {
-		if (!dirtyNodes) dirtyNodes = this.tree.dirtyNodes();
-		if (!needsRenderNodes) needsRenderNodes = this.tree.needsRenderNodes();
-		if (!allNodes) allNodes = this.tree.allNodes();
+		if (!dirtyNodes) dirtyNodes = this.graph.dirtyNodes();
+		if (!needsRenderNodes) needsRenderNodes = this.graph.needsRenderNodes();
+		if (!allNodes) allNodes = this.graph.allNodes();
 
 		const debugDivision = this.getDivision(this._debugDivisionId);
 		needsRenderNodes.push({ division: debugDivision }); // fake a node

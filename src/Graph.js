@@ -80,12 +80,6 @@ class Tree {
 		this.needsRenderNodes.set(division.options.id, node);
 	}
 
-	allNodes() {
-		const allNodes = [];
-		this.traverse(this.tree, node => allNodes.push(node));
-		return allNodes;
-	}
-
 	traverse(startNode, callback) {
 		if (startNode instanceof Division) {
 			startNode = this.nodes.get(startNode.options.id);
