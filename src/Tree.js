@@ -5,134 +5,117 @@ const Division = require('./Division');
  * recalculations and which divisions depend on dimensions of another division.
  */
 class Tree {
-	constructor(jumper) {
-		this.jumper = jumper;
-		// TODO: this is bad. do graph instead
-		this.tree = { depth: 0, parent: null, children: [] };
-		this.nodes = {};
-		this._dirtyNodes = {};
-		this._needsRenderNodes = {};
+	constructor() {
+		this.nodes = new Map();
+		this.dirtyNodes = new Map();
+		this.needsRenderNodes = new Map();
 	}
 
-	addDivision(division) {
-		const node = { division, children: [], depth: 0, parent: null };
+	setDivisions(divisions) {
+		this.nodes.clear();
 
-		const parentNode = (() => {
-			let parent = this.tree;
-
-			for (const prop of ['top', 'left', 'right', 'bottom']) {
-				const dependentId = this._getDependentDivisionId(division.options[prop]);
-				if (!dependentId || !this.nodes[dependentId]) {
-					continue;
-				}
-
-				const dependent = this.nodes[dependentId];
-
-				if (dependent.depth > parent.depth) {
-					parent = dependent;
-				}
-			}
-
-			return parent;
-		})();
-
-		node.depth = parentNode.depth + 1;
-		node.parent = parentNode;
-
-		parentNode.children.push(node);
-		this.nodes[division.options.id] = node;
-		this._dirtyNodes[division.options.id] = node;
-		this._needsRenderNodes[division.options.id] = node;
+		for (const division of divisions) {
+			this.nodes.set(division.options.id, { division, links: new Map() });
+		}
 	}
 
-	_getDependentDivisionId(str) {
-		if (typeof str !== 'string') {
+	calculateGraph() {
+		for (const node of this.nodes.values()) {
+			node.links.clear();
+		}
+
+		const props = ['top', 'left', 'bottom', 'right'];
+
+		for (const node of this.nodes.values()) {
+			const id = node.division.options.id;
+
+			const dependentNodes = props.reduce((arr, prop) => {
+				const dependentId = this._getDependentDivisionId(id);
+				!!dependentId && arr.push(this.nodes.get(dependentId));
+				return arr;
+			}, []);
+
+			dependentNodes.forEach(dependent => dependent.links.set(id, node));
+		}
+	}
+
+	_getDependentDivisionId(id) {
+		if (typeof id !== 'string') {
 			return false;
 		}
 
-		if (this.jumper.hasDivision(str)) {
-			return str;
+		if (this.nodes.get(id)) {
+			return id;
 		}
 
-		const match = /\{(.*)\}/.exec(str);
+		const match = /\{(.*)\}/.exec(id);
 		return match && match[1];
 	}
 
-	removeDivision(division) {
-		const node = this.nodes[division.options.id];
-		node.parent.children.splice(node.parent.children.indexOf(node), 1);
-
-		delete this.nodes[division.options.id];
-		delete this._dirtyNodes[division.options.id];
-		delete this._needsRenderNodes[division.options.id];
-	}
-
 	setDirty(division) {
-		const startNode = division ? this.nodes[division.options.id] : this.tree;
+		if (!division) {
+			this.dirtyNodes.clear();
+			this.needsRenderNodes.clear();
+			this.dirtyNodes = new Map([...this.nodes]);
+			this.needsRenderNodes = new Map([...this.nodes]);
+			return;
+		}
 
-		this.traverseNodes(startNode, node => {
+		const startNode = this.nodes.get(division.options.id);
+
+		if (!startNode) {
+			console.log(this.nodes);
+			throw new Error(`Unrecognized division "${division.options.id}"`);
+		}
+
+		this.traverse(startNode, node => {
 			node.division._resetDimensions();
-			this._dirtyNodes[node.division.options.id] = node;
-			this._needsRenderNodes[node.division.options.id] = node;
+			this.dirtyNodes.set(node.division.options.id, node); // TODO: context
+			this.needsRenderNodes.set(node.division.options.id, node);
 		});
 	}
 
 	setNeedsRender(division) {
-		const node = this.nodes[division.options.id];
-		this._needsRenderNodes[division.options.id] = node;
+		const node = this.nodes.get(division.options.id);
+		this.needsRenderNodes.set(division.options.id, node);
 	}
 
 	allNodes() {
 		const allNodes = [];
-		this.traverseNodes(this.tree, node => allNodes.push(node));
+		this.traverse(this.tree, node => allNodes.push(node));
 		return allNodes;
 	}
 
-	dirtyNodes() {
-		return Object.values(this._dirtyNodes).sort((a, b) => {
-			return (a.depth < b.depth) ? -1 : 1;
-		});
-	}
-
-	needsRenderNodes() {
-		return Object.values(this._needsRenderNodes).sort((a, b) => {
-			return (a.depth < b.depth) ? -1 : 1;
-		});
-	}
-
-	resetDirtyNodes() {
-		this._dirtyNodes = {};
-	}
-
-	resetNeedsRenderNodes() {
-		this._needsRenderNodes = {};
-	}
-
-	/**
-	 * BFS.
-	 */
-	traverseNodes(startNode, callback) {
+	traverse(startNode, callback) {
 		if (startNode instanceof Division) {
-			startNode = this.nodes[startNode.options.id];
+			startNode = this.nodes.get(startNode.options.id);
 		} else if (typeof startNode === 'string') {
-			startNode = this.nodes[startNode];
+			startNode = this.nodes.get(startNode);
 		}
 
-		let idx = 0;
-		const nodeList = (!startNode.parent) ? startNode.children.slice() : [startNode];
+		const cache = {};
+		let depth = 0;
+		let parent = null;
 
-		while (idx < nodeList.length) {
-			nodeList.push(...nodeList[idx].children);
-			idx += 1;
+		function traverse(node) {
+			if (cache[node.division.options.id]) {
+				return;
+			}
+			cache[node.division.options.id] = true;
+
+			callback(node, { depth, parent });
+
+			depth++;
+			parent = node;
+
+			node.links.forEach(traverse);
 		}
 
-		for (let i = 0, l = nodeList.length; i < l; i++) {
-			callback(nodeList[i]);
-		}
+		traverse(startNode);
 	}
 
 	destroy() {
-		this.jumper = this.tree = this.nodes = this._dirtyNodes = this._needsRenderNodes = null;
+		this.nodes = this.dirtyNodes = this.needsRenderNodes = null;
 	}
 }
 

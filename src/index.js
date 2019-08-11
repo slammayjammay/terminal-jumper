@@ -3,7 +3,7 @@ const termSize = require('term-size');
 const chalk = require('chalk');
 const ansiEscapes = require('ansi-escapes');
 const getCursorPosition = require('get-cursor-position');
-const Tree = require('./Tree');
+const Tree = require('./Tree'); // TODO: rename
 const Division = require('./Division');
 const TextBlock = require('./TextBlock');
 
@@ -55,9 +55,8 @@ class TerminalJumper {
 		this.renderPosition = null; // top left corner of the program
 		this.isInitiallyRendered = false; // have we rendered once already?
 		this._isChaining = false; // is writing to a string, or stdout directly?
-		this._chain = ''; // internal string, to be written to stdout (API use)
+		this._chain = ''; // internal string, to be written to stdout
 		this._uniqueIdCounter = 0; // counter for unique division id
-		this._bottomDivision = this._topDivision = null; // store top and bottom divisions
 		this._debugDivisionId = 'debug'; // id for debug division
 
 		this.termSize = this.getTermSize();
@@ -66,9 +65,9 @@ class TerminalJumper {
 		this.divisions = [];
 
 		this.forNextRender = new Map();
+		this.tree = new Tree();
 
-		this.tree = new Tree(this);
-		this.options.divisions.forEach(options => this.addDivision(options));
+		this.addDivision(this.options.divisions);
 
 		if (this.options.debug) {
 			this._addDebugDivision(this.options.debug);
@@ -78,11 +77,17 @@ class TerminalJumper {
 	}
 
 	/**
-	 * @param {Division|object} division - Either a Division object or a
-	 * divisions options object.
-	 * @return {Division} - a division options object.
+	 * @param {array<Division|object>|Division|object} division - Either a
+	 * Division object or a divisions options object.
+	 * @return {Division} - a Division instance.
 	 */
 	addDivision(division) {
+		if (Array.isArray(division)) {
+			division.forEach(division => this.addDivision(division));
+			this.calculateGraph();
+			return;
+		}
+
 		if (!(division instanceof Division)) {
 			division = new Division(division);
 		}
@@ -95,7 +100,7 @@ class TerminalJumper {
 		this.divisionsHash[id] = division;
 		this.divisions.push(division);
 
-		this.tree.addDivision(division);
+		this.calculateGraph();
 		this.setDirty(division);
 
 		return division;
@@ -118,8 +123,11 @@ class TerminalJumper {
 	removeDivision(division) {
 		if (Array.isArray(division)) {
 			division.forEach(division => this.removeDivision(division));
+			this.calculateGraph();
 			return;
-		} else if (typeof division === 'string') {
+		}
+
+		if (typeof division === 'string') {
 			division = this.getDivision(division);
 		}
 
@@ -128,7 +136,7 @@ class TerminalJumper {
 		delete this.divisionsHash[division.options.id];
 		this.divisions.splice(this.divisions.indexOf(division), 1);
 
-		this.tree.removeDivision(division);
+		this.calculateGraph();
 
 		this.setDirty();
 	}
@@ -248,6 +256,11 @@ class TerminalJumper {
 		return this;
 	}
 
+	calculateGraph() {
+		this.tree.setDivisions(this.divisions);
+		this.tree.calculateGraph();
+	}
+
 	_setupInitialRender() {
 		// get the cursor position. we only care about which row the cursor is on
 		this.renderPosition = this._getCursorPosition();
@@ -283,18 +296,11 @@ class TerminalJumper {
 		const height = this.height();
 		this._setFullHeightDivs(height);
 
-		// all "dirty" nodes will also be a "needsRender" node
-		const dirtyNodes = this.tree.dirtyNodes();
-		const needsRenderNodes = this.tree.needsRenderNodes();
-
 		if (this.options.debug) {
 			this._renderDebugDivision({ dirtyNodes, needsRenderNodes });
 		}
 
-		this.tree.resetDirtyNodes();
-		this.tree.resetNeedsRenderNodes();
-
-		for (let division of dirtyNodes.map(node => node.division)) {
+		for (const { division } of this.tree.dirtyNodes.values()) {
 			division._calculateDimensions(true);
 		}
 
@@ -305,13 +311,12 @@ class TerminalJumper {
 			this.renderPosition.row -= numRowsToAllocate;
 		}
 
-		needsRenderNodes.sort((a, b) => {
+		Array.from(this.tree.needsRenderNodes.values()).sort((a, b) => {
 			return a.division.options.renderOrder - b.division.options.renderOrder;
 		}).forEach(node => writeString += node.division.renderString());
 
-		if (dirtyNodes.length > 0) {
-			this._height = null;
-		}
+		this.tree.dirtyNodes.clear();
+		this.tree.needsRenderNodes.clear();
 
 		return writeString;
 	}
@@ -516,22 +521,6 @@ class TerminalJumper {
 			div._setHeight(height - div.top());
 			this.tree.setDirty(div);
 		}
-	}
-
-	// TODO: this is not best
-	_getTopDivision() {
-		return this.divisions.sort((one, two) => {
-			return one.top() <= two.top() ? -1 : 1;
-		})[0];
-	}
-
-	// TODO: this is not best
-	_getBottomDivision() {
-		return this.divisions.sort((one, two) => {
-			const onePos = one.top() + one.height();
-			const twoPos = two.top() + two.height();
-			return twoPos > onePos ? 1 : -1;
-		})[0];
 	}
 
 	_addDebugDivision(options) {
