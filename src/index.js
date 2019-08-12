@@ -3,21 +3,25 @@ const termSize = require('term-size');
 const chalk = require('chalk');
 const ansiEscapes = require('ansi-escapes');
 const getCursorPosition = require('get-cursor-position');
-const Graph = require('./Graph'); // TODO: rename
+const Graph = require('./Graph');
 const Division = require('./Division');
 const TextBlock = require('./TextBlock');
 
+const DEFAULT_DIVISION_OPTIONS = {
+	id: 'default-division',
+	top: 0,
+	left: 0,
+	width: '100%'
+};
+
 const DEFAULT_OPTIONS = {
 	/**
-	 * Defaults to one full-width division.
-	 * TODO: do not add this on instantiation.
+	 * @type {array<object>|string}
+	 *
+	 * An array of division options. If a string 'default' is given, a division
+	 * is automatically added using the default options.
 	 */
-	divisions: [{
-		id: 'default-division',
-		top: 0,
-		left: 0,
-		width: '100%'
-	}],
+	divisions: [],
 
 	/**
 	 * If true, caps the max height of TerminalJumper to the number of rows minus
@@ -67,7 +71,11 @@ class TerminalJumper {
 		this.forNextRender = new Map();
 		this.graph = new Graph();
 
-		this.addDivision(this.options.divisions);
+		if (this.options.divisions === 'default') {
+			this.addDivision(DEFAULT_DIVISION_OPTIONS);
+		} else {
+			this.addDivision(this.options.divisions);
+		}
 
 		if (this.options.debug) {
 			this._addDebugDivision(this.options.debug);
@@ -81,9 +89,9 @@ class TerminalJumper {
 	 * Division object or a divisions options object.
 	 * @return {Division} - a Division instance.
 	 */
-	addDivision(division) {
+	addDivision(division, calculate = true) {
 		if (Array.isArray(division)) {
-			division.forEach(division => this.addDivision(division));
+			division.forEach(division => this.addDivision(division, false));
 			this.calculateGraph();
 			return;
 		}
@@ -100,7 +108,7 @@ class TerminalJumper {
 		this.divisionsHash[id] = division;
 		this.divisions.push(division);
 
-		this.calculateGraph();
+		calculate && this.calculateGraph();
 		this.setDirty(division);
 
 		return division;
@@ -120,9 +128,9 @@ class TerminalJumper {
 		return !!this.divisionsHash[id];
 	}
 
-	removeDivision(division) {
+	removeDivision(division, calculate = true) {
 		if (Array.isArray(division)) {
-			division.forEach(division => this.removeDivision(division));
+			division.forEach(division => this.removeDivision(division, false));
 			this.calculateGraph();
 			return;
 		}
@@ -131,14 +139,12 @@ class TerminalJumper {
 			division = this.getDivision(division);
 		}
 
-		this.graph.setDirty(division);
-
 		delete this.divisionsHash[division.options.id];
 		this.divisions.splice(this.divisions.indexOf(division), 1);
 
-		this.calculateGraph();
+		this.setDirty(division);
 
-		this.setDirty();
+		calculate && this.calculateGraph();
 	}
 
 	reset() {
@@ -155,7 +161,8 @@ class TerminalJumper {
 
 			division = this.getDivision(ids[0]);
 
-			if (!division && this.divisions[0].options.id === 'default-division') {
+			if (!division) {
+				this.divisions.length === 0 && this.addDivision(DEFAULT_DIVISION_OPTIONS);
 				division = this.divisions[0];
 				blockId = text;
 				text = targets;

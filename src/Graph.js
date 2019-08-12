@@ -19,12 +19,22 @@ class Tree {
 	}
 
 	setDivisions(divisions) {
-		this.nodes.clear();
-		this.dirtyNodes.clear();
-		this.needsRenderNodes.clear();
+		const nodesToKeep = {};
 
 		for (const division of divisions) {
-			this.nodes.set(division.options.id, this.createNode(division));
+			nodesToKeep[division.options.id] = true;
+
+			if (!this.nodes.has(division.options.id)) {
+				this.nodes.set(division.options.id, this.createNode(division));
+			}
+		}
+
+		for (const id of this.nodes.keys()) {
+			if (!nodesToKeep[id]) {
+				this.nodes.delete(id);
+				this.dirtyNodes.delete(id);
+				this.needsRenderNodes.delete(id);
+			}
 		}
 	}
 
@@ -71,7 +81,7 @@ class Tree {
 		const startNode = this.nodes.get(division.options.id);
 
 		if (!startNode) {
-			throw new Error(`Unrecognized division "${division.options.id}"`);
+			return;
 		}
 
 		this.traverse(startNode, (node, { depth, parent }) => {
@@ -89,7 +99,7 @@ class Tree {
 	}
 
 	setNeedsRender(division) {
-		if (this.dirtyNodes.has(division.options.id)) {
+		if (!this.nodes.has(division.options.id) || this.dirtyNodes.has(division.options.id)) {
 			return;
 		}
 
