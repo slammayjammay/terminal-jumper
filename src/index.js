@@ -297,10 +297,13 @@ class TerminalJumper {
 		this._setFullHeightDivs(height);
 
 		if (this.options.debug) {
-			this._renderDebugDivision({ dirtyNodes, needsRenderNodes });
+			this._setupDebugDivision();
 		}
 
-		for (const { division } of this.graph.dirtyNodes.values()) {
+		const dirtyNodes = Array.from(this.graph.dirtyNodes.values());
+		const needsRenderNodes = Array.from(this.graph.needsRenderNodes.values());
+
+		for (const { division } of dirtyNodes) {
 			division._calculateDimensions(true);
 		}
 
@@ -311,12 +314,11 @@ class TerminalJumper {
 			this.renderPosition.row -= numRowsToAllocate;
 		}
 
-		Array.from(this.graph.needsRenderNodes.values()).sort((a, b) => {
+		[...dirtyNodes, ...needsRenderNodes].sort((a, b) => {
 			return a.division.options.renderOrder - b.division.options.renderOrder;
 		}).forEach(node => writeString += node.division.renderString());
 
-		this.graph.dirtyNodes.clear();
-		this.graph.needsRenderNodes.clear();
+		this.graph.clear();
 
 		return writeString;
 	}
@@ -532,10 +534,9 @@ class TerminalJumper {
 			id: this._debugDivisionId,
 			width: '40%',
 			bottom: 0,
-			right: 0
+			right: 0,
+			renderOrder: 100
 		}, options);
-
-		const divisionsToMonitor = this.divisions.slice();
 
 		this._debugDivisionId = options.id;
 		this.addDivision(options);
@@ -548,79 +549,64 @@ class TerminalJumper {
 		debugDivision.addBlock(new Array(debugDivision.width()).join('='), 'divider');
 	}
 
-	/**
-	 * Parameters are optional -- if given, they avoid recalculations.
-	 * Legend:
-	 * RED -- division was recalculated and re-rendered.
-	 * YELLOW -- division was re-rendered.
-	 * WHITE -- division was neither re-calculated nor re-rendered.
-	 *
-	 * @param {object}
-	 * @prop {array} [allNodes] - All nodes in the graph.
-	 * @prop {array} [dirtyNodes] - All dirty nodes in the graph.
-	 * @prop {array} [needsRenderNodes] - All nodes that need rendering in the graph.
-	 */
-	_renderDebugDivision({ dirtyNodes, needsRenderNodes, allNodes }) {
-		if (!dirtyNodes) dirtyNodes = this.graph.dirtyNodes();
-		if (!needsRenderNodes) needsRenderNodes = this.graph.needsRenderNodes();
-		if (!allNodes) allNodes = this.graph.allNodes();
+	_setupDebugDivision() {
+		const debugDiv = this.getDivision(this._debugDivisionId);
 
-		const debugDivision = this.getDivision(this._debugDivisionId);
-		needsRenderNodes.push({ division: debugDivision }); // fake a node
-
-		// flash the divider green whenever this method is called (whenever #render
-		// is called)
-		this._flashDivider();
-
-		// iterate through all division ids and color them correctly
-		const processed = { [debugDivision.options.id]: true };
-
-		const map = [
-			[dirtyNodes, 'red'],
-			[needsRenderNodes, 'yellow'],
-			[allNodes, 'white']
-		];
-
-		for (let [nodeTypes, color] of map) {
-			let startNode; // correct spacing when showing dirty node hierarchy
-
-			for (let node of nodeTypes) {
-				if (processed[node.division.options.id]) {
-					continue;
-				}
-				processed[node.division.options.id] = true;
-				startNode = startNode || node;
-
-				const targets = `${this._debugDivisionId}.${node.division.options.id}`;
-
-				if (this.hasBlock(targets)) {
-					this.getBlock(targets).remove();
-				}
-
-				const spacing = new Array(node.depth - startNode.depth + 1).join(' ');
-				const str = `${spacing}${spacing ? '↳' : ''}${node.division.options.id}`;
-				const text = chalk[color](str);
-				this.addBlock(targets, text);
+		for (let i = 0, l = debugDiv.blockIds.length; i < l; i++) {
+			if (debugDiv.hasBlock(`div-block-${i}`)) {
+				debugDiv.removeBlock(`div-block-${i}`);
+			} else {
+				break;
 			}
 		}
-	}
 
-	_flashDivider() {
-		const divider = this.getBlock(`${this._debugDivisionId}.divider`);
+		const processed = {};
+		const dirtyBlocks = [];
+		const needsRenderBlocks = [];
+		const remainingBlocks = [];
 
-		// set green
-		divider.content(chalk.green(divider.escapedText));
+		const checkIfProcessed = (node) => {
+			if (processed[node.division.options.id] || node.division === debugDiv) {
+				return true;
+			}
 
-		// return to white
-		setTimeout(() => {
-			divider.content(divider.escapedText);
+			processed[node.division.options.id] = true;
+			return false;
+		};
 
-			process.stdout.write(
-				ansiEscapes.cursorSavePosition +
-				this.getDivision(this._debugDivisionId).renderString() +
-				ansiEscapes.cursorRestorePosition
-			);
-		}, 400);
+		const addBlock = (array, text, color) => {
+			array.push(chalk[color || 'white'](text));
+		};
+
+		for (const [id, node] of this.graph.nodes.entries()) {
+			if (this.graph.dirtyNodes.has(node.division.options.id)) {
+				this.graph.traverse(node, (child, { depth }) => {
+					if (checkIfProcessed(child)) return;
+
+					let text = child.division.options.id;
+					if (child.depth) {
+						text = (new Array(child.depth)).fill(' ').join('') + '↳' + text;
+					}
+
+					addBlock(dirtyBlocks, text, 'red');
+				});
+			} else {
+				if (checkIfProcessed(node)) continue;
+
+				const { id } = node.division.options;
+				const isNeedsRender = this.graph.needsRenderNodes.has(id);
+				const array = isNeedsRender ? needsRenderBlocks : remainingBlocks;
+				const color = isNeedsRender ? 'yellow' : 'white';
+
+				addBlock(array, id, color);
+			}
+		}
+
+		const allBlocks = dirtyBlocks.concat(needsRenderBlocks, remainingBlocks);
+
+		for (const [idx, block] of allBlocks.entries()) {
+			debugDiv.addBlock(block, `div-block-${idx}`);
+		}
 	}
 }
 

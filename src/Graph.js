@@ -11,11 +11,20 @@ class Tree {
 		this.needsRenderNodes = new Map();
 	}
 
+	createNode(division) {
+		return {
+			division,
+			links: new Map()
+		};
+	}
+
 	setDivisions(divisions) {
 		this.nodes.clear();
+		this.dirtyNodes.clear();
+		this.needsRenderNodes.clear();
 
 		for (const division of divisions) {
-			this.nodes.set(division.options.id, { division, links: new Map() });
+			this.nodes.set(division.options.id, this.createNode(division));
 		}
 	}
 
@@ -30,7 +39,7 @@ class Tree {
 			const id = node.division.options.id;
 
 			const dependentNodes = props.reduce((arr, prop) => {
-				const dependentId = this._getDependentDivisionId(id);
+				const dependentId = this._getDependentDivisionId(node.division.options[prop]);
 				!!dependentId && arr.push(this.nodes.get(dependentId));
 				return arr;
 			}, []);
@@ -55,27 +64,35 @@ class Tree {
 	setDirty(division) {
 		if (!division) {
 			this.dirtyNodes.clear();
-			this.needsRenderNodes.clear();
 			this.dirtyNodes = new Map([...this.nodes]);
-			this.needsRenderNodes = new Map([...this.nodes]);
 			return;
 		}
 
 		const startNode = this.nodes.get(division.options.id);
 
 		if (!startNode) {
-			console.log(this.nodes);
 			throw new Error(`Unrecognized division "${division.options.id}"`);
 		}
 
-		this.traverse(startNode, node => {
+		this.traverse(startNode, (node, { depth, parent }) => {
+			if (this.dirtyNodes.has(node.division.options.id)) {
+				return;
+			}
+
 			node.division._resetDimensions();
-			this.dirtyNodes.set(node.division.options.id, node); // TODO: context
-			this.needsRenderNodes.set(node.division.options.id, node);
+
+			node.depth = depth;
+			node.parent = parent;
+
+			this.dirtyNodes.set(node.division.options.id, node);
 		});
 	}
 
 	setNeedsRender(division) {
+		if (this.dirtyNodes.has(division.options.id)) {
+			return;
+		}
+
 		const node = this.nodes.get(division.options.id);
 		this.needsRenderNodes.set(division.options.id, node);
 	}
@@ -106,6 +123,13 @@ class Tree {
 		}
 
 		traverse(startNode);
+	}
+
+	clear() {
+		this.dirtyNodes.clear();
+		this.needsRenderNodes.clear();
+
+		this.nodes.forEach(node => node.depth = node.parent = null);
 	}
 
 	destroy() {
