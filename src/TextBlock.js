@@ -14,6 +14,9 @@ const TAB_FAKER = new Array(TAB_WIDTH).join(' ');
  * @class
  */
 class TextBlock {
+	/**
+	 * @param {string|array<string>} text - a string or array of strings.
+	 */
 	constructor(text = '') {
 		this.text = this.escapedText = '';
 		this._height = this._lines = null;
@@ -22,20 +25,23 @@ class TextBlock {
 	}
 
 	/**
-	 * Overwrite this text block's text with the given string.
+	 * Overwrite this text block's text with given.
 	 *
-	 * @param {string} text - The text to save to this block.
+	 * @param {string|array<string>} text - The text to save to this block.
 	 * @return {TextBlock}
 	 */
 	content(text) {
-		// try to force convert to string
-		if (typeof text !== 'string') {
-			text += '';
+		let string;
+
+		if (Array.isArray(text)) {
+			string = text.join('');
+		} else {
+			string = String(text);
 		}
 
-		text = text.replace(/\t/g, TAB_FAKER);
+		string = string.replace(/\t/g, TAB_FAKER);
 
-		const escaped = stripAnsi(text);
+		const escaped = stripAnsi(string);
 		const hasChanged = stringWidth(escaped) !== stringWidth(this.escapedText);
 
 		this.text = text;
@@ -50,14 +56,29 @@ class TextBlock {
 		return this;
 	}
 
+	update() {
+		this.content(this.text);
+	}
+
 	/**
 	 * Appends a string of text to this block.
 	 *
-	 * @param {string} text - The string to append.
+	 * @param {string|array<string>} text - The text to append.
 	 * @return {TextBlock}
 	 */
 	append(text) {
-		this.content(this.text + text);
+		let newText;
+
+		if (typeof this.text === 'string' && typeof text === 'string') {
+			newText = this.text + text;
+		} else if (typeof this.text === 'string' && Array.isArray(text)) {
+			newText = [this.text, ...text];
+		} else if (Array.isArray(this.text) && typeof text === 'string') {
+			newText = [...this.text, text];
+		}
+
+		this.content(newText);
+
 		return this;
 	}
 
@@ -100,7 +121,7 @@ class TextBlock {
 	}
 
 	getWidthOnRow(row) {
-		return stripAnsi(this.getRow(row)).length;
+		return stringWidth(this.getRow(row));
 	}
 
 	destroy() {
@@ -112,11 +133,13 @@ class TextBlock {
 	}
 
 	_getLines() {
+		const textString = Array.isArray(this.text) ? this.text.join('') : this.text;
+
 		if (this.division.options.overflowX === 'wrap') {
 			const lines = [];
 			const divisionWidth = this.division.contentWidth();
 
-			for (let line of this.text.split('\n')) {
+			for (const line of textString.split('\n')) {
 				const wrapped = this._getWrappedLine(line, divisionWidth);
 				lines.push(...wrapped.split('\n'));
 			}
@@ -125,7 +148,7 @@ class TextBlock {
 		}
 
 		if (this.division.options.overflowX === 'scroll') {
-			return this.text.split('\n');
+			return textString.split('\n');
 		}
 	}
 
@@ -138,7 +161,7 @@ class TextBlock {
 			return wrapAnsi(text, divisionWidth, { trim: false });
 		}
 
-		const textLength = stripAnsi(text).length;
+		const textLength = stringWidth(text);
 
 		const lines = [];
 		let startIdx = 0;
@@ -155,4 +178,4 @@ class TextBlock {
 	}
 }
 
-module.exports = TextBlock
+module.exports = TextBlock;
