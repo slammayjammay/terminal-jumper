@@ -692,53 +692,65 @@ class Division {
 	}
 
 	_calculateTop() {
-		let { top, bottom } = this.options;
+		const { top, bottom } = this.options;
 
 		const isTop = top !== null;
 		const prop = isTop ? top : bottom;
+
 		const getAligned = (id) => {
-			return this.jumper.getDivision(id)[isTop ? 'bottom' : 'top']();
+			const div = this.jumper.getDivision(id);
+			return isTop ? div.bottom() : div.top();
 		};
 
-		let expr = prop;
-		// option points to a division id
-		if (this.jumper.hasDivision(prop)) expr = getAligned(prop);
-		// option points to an expression containing a division id
-		else if (typeof prop === 'string') expr = this._replaceId(prop, getAligned);
+		let val;
 
-		let val = this.evaluate(expr, { '%': this.jumper.getAvailableHeight() });
-		if (!isTop) {
-			val = this.jumper.getAvailableHeight() - this.height() - val;
+		if (typeof prop === 'number') {
+			val = this.jumper.getAvailableHeight() - prop;
+		} else if (this.jumper.hasDivision(prop)) {
+			val = getAligned(prop);
+		} else if (typeof prop === 'string') {
+			const expr = this._replaceId(prop, getAligned);
+			val = this.evaluate(expr, { '%': this.jumper.getAvailableHeight() });
 		}
 
-		return val;
+		return isTop ? val : val - this.height();
 	}
 
 	_calculateLeft() {
-		let { left, right } = this.options;
+		const { left, right } = this.options;
 
 		const isLeft = left !== null;
 		const prop = isLeft ? left : right;
+
 		const getAligned = (id) => {
-			return this.jumper.getDivision(id)[isLeft ? 'right' : 'left']();
+			const div = this.jumper.getDivision(id);
+			return isLeft ? div.right() : div.left() - this.width();
 		};
 
-		let expr = prop;
-		// option points to a division id
-		if (this.jumper.hasDivision(prop)) expr = getAligned(prop);
-		// option points to an expression containing a division id
-		else if (typeof prop === 'string') expr = this._replaceId(prop, getAligned);
+		let val;
 
-		let val = this.evaluate(expr, { '%': this.width() });
-		if (!isLeft) {
-			val = this.jumper.width() - this.width() - val;
+		if (typeof prop === 'number') {
+			val = this.jumper.width() - prop;
+		} else if (this.jumper.hasDivision(prop)) {
+			val = getAligned(prop);
+		} else if (typeof prop === 'string') {
+			const expr = this._replaceId(prop, getAligned);
+			val = this.evaluate(expr, { '%': this.jumper.width() });
 		}
 
-		return val;
+		return isLeft ? val : val - this.width();
 	}
 
 	_calculateWidth() {
-		return this.evaluate(this.options.width, { '%': this.jumper.width() });
+		let expression = this.options.width;
+		if (this.jumper.hasDivision(expression)) {
+			expression = this.jumper.getDivision(expression).width();
+		} else if (typeof expression === 'string') {
+			expression = this._replaceId(expression, id => {
+				return this.jumper.getDivision(id).width();
+			});
+		}
+		return this.evaluate(expression, { '%': this.jumper.width() });
 	}
 
 	/**
@@ -762,7 +774,17 @@ class Division {
 	 */
 	_calculateHeight() {
 		if (this.options.height) {
-			return this.evaluate(this.options.height, { '%': this.jumper.getAvailableHeight() });
+			let expression = this.options.height;
+
+			if (this.jumper.hasDivision(expression)) {
+				expression = this.jumper.getDivision(expression).height();
+			} else if (typeof expression === 'string') {
+				expression = this._replaceId(expression, id => {
+					return this.jumper.getDivision(id).height();
+				});
+			}
+
+			return this.evaluate(expression, { '%': this.jumper.getAvailableHeight() });
 		}
 
 		return this.allLines().length;
