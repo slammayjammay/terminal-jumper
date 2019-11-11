@@ -127,7 +127,7 @@ class Evaluator {
 		} else if (typeof fnOrObj === 'object') {
 			return this.defaultUnitParser(number, unit, fnOrObj[unit]);
 		} else {
-			throw new Error(`Do not know how to calculate unit "${unit}" in expression "${expression}".`);
+			throw new Error(`Do not know how to calculate unit "${unit}" in expression "${expression}", (with map "${fnOrObj}").`);
 		}
 	}
 

@@ -670,25 +670,57 @@ class Division {
 		}
 	}
 
-	/**
-	 * Wrapper helper for `evaluator.evaluate`. Floors values.
-	 */
 	evaluate(expression, fnOrObj) {
-		return ~~(evaluator.evaluate(expression, fnOrObj));
+		if (typeof expression === 'number') {
+			return ~~(expression);
+		}
+
+		const replaced = this._replaceId(expression, (id, property) => {
+			if (!this.jumper.hasDivision(id)) {
+				throw new Error(`Division "${id}" not found (from expression "${expression}").`);
+			}
+
+			if (!property) {
+				throw new Error(`Do not know how to use division "${id}" in expression "${expression}" (missing property name after curly braces).`);
+			}
+
+			const div = this.jumper.getDivision(id);
+
+			if (property === 't' || property === 'top') return div.top();
+			if (property === 'l' || property === 'left') return div.left();
+			if (property === 'w' || property === 'width') return div.width();
+			if (property === 'h' || property === 'height') return div.height();
+			if (property === 'b' || property === 'bottom') return div.bottom();
+			if (property === 'r' || property === 'right') return div.right();
+
+			throw new Error(`Unknown property "${property}".`);
+		});
+
+		return ~~(evaluator.evaluate(replaced, fnOrObj));
 	}
 
 	/**
-	 * @param {string} string - The evaluation string.
+	 * Given an expression and callback, captures anything inside of and
+	 * immediately after curly braces. Replaces it with the return value of the
+	 * callback, which is called given the found values inside and after the
+	 * curly braces.
+	 *
+	 * Example:
+	 * _replaceId('{div-1}top + {div-2}left * 0.5', (inside, after) => {
+	 *   console.log(inside, after);
+	 * });
+	 * // => 'div-1', 'top'
+	 * // => 'div-2', 'left'
+	 *
+	 * @param {expression} string - The expression string.
 	 * @param {function} cb - The callback function, called with the found id,
-	 * that returns the value to replace the id with.
+	 * that returns the value to replace the id with. Also gives any characters
+	 * directly after the closing bracket.
+	 * @return {string}
 	 */
-	_replaceId(string, cb) {
-		return string.replace(/\{(.*)\}/, (_, id) => {
-			if (!this.jumper.hasDivision(id)) {
-				throw new Error(`Id "${id}" not found (from expression "${string}").`);
-			}
-			return cb(id);
-		});
+	_replaceId(expression, cb) {
+		const reg = /\{([^\{\}]*)\}([a-zA-Z]*)(?=\s|$)/g;
+		return expression.replace(reg, (_, id, property) => cb(id, property));
 	}
 
 	_calculateTop() {
@@ -696,21 +728,16 @@ class Division {
 
 		const isTop = top !== null;
 		const prop = isTop ? top : bottom;
-
-		const getAligned = (id) => {
-			const div = this.jumper.getDivision(id);
-			return isTop ? div.bottom() : div.top();
-		};
+		const jumperHeight = this.jumper.getAvailableHeight();
 
 		let val;
 
 		if (typeof prop === 'number') {
-			val = this.jumper.getAvailableHeight() - prop;
-		} else if (this.jumper.hasDivision(prop)) {
-			val = getAligned(prop);
+			val = isTop ? prop : jumperHeight - prop;
 		} else if (typeof prop === 'string') {
-			const expr = this._replaceId(prop, getAligned);
-			val = this.evaluate(expr, { '%': this.jumper.getAvailableHeight() });
+			val = this.evaluate(prop, { '%': jumperHeight });
+		} else {
+			throw new Error(`${isTop ? 'top' : 'bottom'} property must be a number or string (received: "${prop}").`);
 		}
 
 		return isTop ? val : val - this.height();
@@ -721,36 +748,23 @@ class Division {
 
 		const isLeft = left !== null;
 		const prop = isLeft ? left : right;
-
-		const getAligned = (id) => {
-			const div = this.jumper.getDivision(id);
-			return isLeft ? div.right() : div.left() - this.width();
-		};
+		const jumperWidth = this.jumper.width();
 
 		let val;
 
 		if (typeof prop === 'number') {
-			val = this.jumper.width() - prop;
-		} else if (this.jumper.hasDivision(prop)) {
-			val = getAligned(prop);
+			val = isLeft ? prop : jumperWidth - prop;
 		} else if (typeof prop === 'string') {
-			const expr = this._replaceId(prop, getAligned);
-			val = this.evaluate(expr, { '%': this.jumper.width() });
+			val = this.evaluate(prop, { '%': jumperWidth });
+		} else {
+			throw new Error(`${isLeft ? 'left' : 'right'} property must be a number or string (received: "${prop}").`);
 		}
 
 		return isLeft ? val : val - this.width();
 	}
 
 	_calculateWidth() {
-		let expression = this.options.width;
-		if (this.jumper.hasDivision(expression)) {
-			expression = this.jumper.getDivision(expression).width();
-		} else if (typeof expression === 'string') {
-			expression = this._replaceId(expression, id => {
-				return this.jumper.getDivision(id).width();
-			});
-		}
-		return this.evaluate(expression, { '%': this.jumper.width() });
+		return this.evaluate(this.options.width, { '%': this.jumper.width() });
 	}
 
 	/**
@@ -774,17 +788,7 @@ class Division {
 	 */
 	_calculateHeight() {
 		if (this.options.height) {
-			let expression = this.options.height;
-
-			if (this.jumper.hasDivision(expression)) {
-				expression = this.jumper.getDivision(expression).height();
-			} else if (typeof expression === 'string') {
-				expression = this._replaceId(expression, id => {
-					return this.jumper.getDivision(id).height();
-				});
-			}
-
-			return this.evaluate(expression, { '%': this.jumper.getAvailableHeight() });
+			return this.evaluate(this.options.height, { '%': this.jumper.getAvailableHeight() });
 		}
 
 		return this.allLines().length;
