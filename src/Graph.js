@@ -69,7 +69,7 @@ class Tree {
 			return id;
 		}
 
-		const match = /\{([a-zA-Z]*)\}/.exec(id);
+		const match = /\{([^\{\}]*)\}/.exec(id);
 		return match && match[1];
 	}
 
