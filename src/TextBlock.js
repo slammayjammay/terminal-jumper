@@ -36,7 +36,7 @@ class TextBlock {
 		if (Array.isArray(text)) {
 			string = text.join('');
 		} else {
-			string = String(text);
+			string = text + '';
 		}
 
 		string = string.replace(/\t/g, TAB_FAKER);
@@ -44,7 +44,7 @@ class TextBlock {
 		const escaped = stripAnsi(string);
 		const hasChanged = stringWidth(escaped) !== stringWidth(this.escapedText);
 
-		this.text = text;
+		this.text = string;
 		this.escapedText = escaped;
 
 		this._height = this._lines = null;
