@@ -26,7 +26,7 @@ class Evaluator {
 	 */
 	flatten(exp, fnOrObj) {
 		let leftIdx = null;
-		let rightIdx = null;;
+		let rightIdx = null;
 
 		// find the first flat sub expression
 		for (let i = 0, l = exp.length; i < l; i++) {
@@ -47,9 +47,27 @@ class Evaluator {
 
 		// evaluate sub expression and replace the original expression with the result
 		if (leftIdx !== null && rightIdx !== null) {
-			const subExpression = exp.slice(leftIdx + 1, rightIdx);
-			const evaluated = this.evaluateFlatExpression(subExpression, fnOrObj);
-			const replaced = exp.slice(0, leftIdx) + evaluated + exp.slice(rightIdx + 1);
+			const insides = exp.slice(leftIdx + 1, rightIdx);
+			let functionName = '';
+			let replaced;
+
+			// if alpha-numeric chars are immediately before parentheses, this will
+			// be a function call; otherwise it is a subexpression
+			let idx = leftIdx - 1;
+			while (exp[idx] && /\w/.test(exp[idx])) {
+				functionName = exp[idx] + functionName;
+				idx--;
+			}
+
+			if (functionName) {
+				const replaceWith = this.callFunction(functionName, insides, fnOrObj);
+				replaced = exp.slice(0, idx + 1) + replaceWith + exp.slice(rightIdx + 1);
+			} else {
+				const replaceWith = this.evaluateFlatExpression(insides, fnOrObj);
+				replaced = exp.slice(0, leftIdx) + replaceWith + exp.slice(rightIdx + 1);
+			}
+
+
 			return this.evaluate(replaced, fnOrObj);
 		}
 
@@ -81,6 +99,20 @@ class Evaluator {
 		}
 
 		return parseFloat(exp);
+	}
+
+	// min(arg1, arg2, arg3)
+	// functionName: 'min'
+	// insides: 'arg1, arg2, arg3'
+	callFunction(functionName, insides, fnOrObj) {
+		// TODO: more functions than just the ones in Math
+		const fn = Math[functionName];
+		if (!fn) {
+			throw new Error(`Does not know how to call function "${functionName}".`);
+		}
+
+		const args = insides.split(/\s*,\s*/);
+		return fn(...args.map(arg => this.evaluate(arg, fnOrObj)));
 	}
 
 	/**

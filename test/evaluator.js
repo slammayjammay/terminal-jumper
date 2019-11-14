@@ -77,6 +77,24 @@ describe('Evaluator', () => {
 		});
 	});
 
+	describe('can compute recognized Math functions', () => {
+		it('can compute e.g. the absolute value of a number', () => {
+			assert.equal(EVAL('abs(-40)'), 40);
+		});
+
+		it('can call nested functions', () => {
+			assert.equal(EVAL('max(0, min(10, 9999999))'), 10);
+		});
+
+		it('can evaluate arguments passed to functions', () => {
+			assert.equal(EVAL('pow(5, 10 - 7)'), 125);
+		});
+
+		it('can evaluate nested arguments passed to nested functions', () => {
+			assert.equal(EVAL('pow(25 / min(5, 10 - 3), abs(floor(-3.6) + 1))'), 125);
+		});
+	});
+
 	describe('can perform various complicated expressions', () => {
 		const width = 75;
 		const height = 50;
