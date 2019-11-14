@@ -276,6 +276,10 @@ class Division {
 		return this._height;
 	}
 
+	naturalHeight() {
+		return this.allLines().length;
+	}
+
 	/**
 	 * Returns the height, after taking scroll bar into account.
 	 */
@@ -697,6 +701,7 @@ class Division {
 			if (property === 'h' || property === 'height') return div.height();
 			if (property === 'b' || property === 'bottom') return div.bottom();
 			if (property === 'r' || property === 'right') return div.right();
+			if (property === 'nh' || property === 'natural-height') return div.naturalHeight();
 
 			throw new Error(`Unknown property "${property}".`);
 		});
@@ -724,7 +729,7 @@ class Division {
 	 * @return {string}
 	 */
 	_replaceId(expression, cb) {
-		const reg = /\{([^\{\}]*)\}([a-zA-Z]*)(?=\s|$)/g;
+		const reg = /\{([^\{\}]*)\}([\w]*)(?=[^\w]|$)/g;
 		return expression.replace(reg, (_, id, property) => cb(id, property));
 	}
 
@@ -780,7 +785,7 @@ class Division {
 	 * top offset is dependent on the height (number of terminal rows minus the
 	 * height).
 	 *
-	 * Solution: `_calculateHeight` will return `allLines().length`, even if it
+	 * Solution: `_calculateHeight` will return `naturalHeight()`, even if it
 	 * overflows the terminal window. Afterward, `_constrainHeight` needs to be
 	 * called to avoid the overflow (this will depend on the top offset). And
 	 * between the two, the top offset will be calculated. It will possibly be
@@ -796,7 +801,7 @@ class Division {
 			return this.evaluate(this.options.height, { '%': this.jumper.getAvailableHeight() });
 		}
 
-		return this.allLines().length;
+		return this.naturalHeight();
 	}
 
 	/**
@@ -848,7 +853,7 @@ class Division {
 	}
 
 	_calculateMaxScrollY() {
-		return Math.max(0, this.allLines().length - this.height());
+		return Math.max(0, this.naturalHeight() - this.height());
 	}
 
 	_setNeedsRender(block) {
