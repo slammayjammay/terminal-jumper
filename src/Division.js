@@ -423,12 +423,15 @@ class Division {
 		let renderString = '';
 		let linesToRender = this.allLines();
 
+		renderString += this.jumper.renderInjects.inject(new RegExp(`^${this.options.id}:before:`));
+
 		// scrollY
 		linesToRender = linesToRender.slice(this.scrollPosY(), this.scrollPosY() + this.contentHeight());
 
 		// scrollX
 		linesToRender = linesToRender.map(line => {
 			// slice-ansi is not reliable when styled with multiple colors
+			// TODO: this has since been fixed
 			const truncated = sliceAnsi(
 				line,
 				this.scrollPosX(),
@@ -484,6 +487,8 @@ class Division {
 			renderString += line;
 			lineIncrement += 1;
 		}
+
+		renderString += this.jumper.renderInjects.inject(new RegExp(`^${this.options.id}:after:`));
 
 		this._lastRenderCache = {
 			startTop,
@@ -740,7 +745,7 @@ class Division {
 			throw new Error(`${isTop ? 'top' : 'bottom'} property must be a number or string (received: "${prop}").`);
 		}
 
-		return isTop ? val : val - this.height();
+		return Math.max(0, isTop ? val : val - this.height());
 	}
 
 	_calculateLeft() {
@@ -760,7 +765,7 @@ class Division {
 			throw new Error(`${isLeft ? 'left' : 'right'} property must be a number or string (received: "${prop}").`);
 		}
 
-		return isLeft ? val : val - this.width();
+		return Math.max(0, isLeft ? val : val - this.width());
 	}
 
 	_calculateWidth() {
@@ -806,7 +811,14 @@ class Division {
 			this._top = this._calculateTop();
 		}
 
-		this._height = Math.min(this._height, this.jumper.getAvailableHeight() - this.top());
+		const jumperHeight = this.jumper.getAvailableHeight();
+
+		if (this.options.bottom !== null) {
+			const bottomPosition = this.evaluate(this.options.bottom, { '%': jumperHeight });
+			this._height = Math.min(this._height, this.top() + bottomPosition);
+		} else {
+			this._height = Math.min(this._height, jumperHeight - this.top());
+		}
 	}
 
 	_populateLines() {
@@ -853,9 +865,7 @@ class Division {
 
 	_resetDimensions() {
 		if (this.jumper.isInitiallyRendered) {
-			this.jumper.forNextRender.set(`erase-${this.options.id}`, () => {
-				return this.eraseString();
-			});
+			this.jumper.renderInjects.set(`before:${this.options.id}:-erase`, this.eraseString());
 		}
 
 		this._top = this._left = this._width = null;

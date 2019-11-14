@@ -6,6 +6,7 @@ const getCursorPosition = require('get-cursor-position');
 const Graph = require('./Graph');
 const Division = require('./Division');
 const TextBlock = require('./TextBlock');
+const renderInjects = require('./render-injects');
 
 const DEFAULT_DIVISION_OPTIONS = {
 	id: 'default-division',
@@ -68,7 +69,7 @@ class TerminalJumper {
 		this.divisionsHash = {};
 		this.divisions = [];
 
-		this.forNextRender = new Map();
+		this.renderInjects = renderInjects;
 		this.graph = new Graph();
 
 		if (this.options.divisions === 'default') {
@@ -292,12 +293,7 @@ class TerminalJumper {
 			this._setupInitialRender();
 		}
 
-		let writeString = '';
-
-		for (const val of this.forNextRender.values()) {
-			writeString += (typeof val === 'function') ? (val() || '') : val;
-		}
-		this.forNextRender.clear();
+		let writeString = this.renderInjects.inject(/^before:/);
 
 		// set full height divs
 		const height = this.height();
@@ -324,6 +320,8 @@ class TerminalJumper {
 		[...dirtyNodes, ...needsRenderNodes].sort((a, b) => {
 			return a.division.options.renderOrder - b.division.options.renderOrder;
 		}).forEach(node => writeString += node.division.renderString());
+
+		writeString += this.renderInjects.inject(/^after:/);
 
 		this.graph.clear();
 

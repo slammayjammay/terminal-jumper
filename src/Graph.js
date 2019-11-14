@@ -50,7 +50,9 @@ class Tree {
 
 			const dependentNodes = props.reduce((arr, prop) => {
 				const dependentId = this._getDependentDivisionId(node.division.options[prop]);
-				!!dependentId && arr.push(this.nodes.get(dependentId));
+				if (dependentId && dependentId !== id) {
+					arr.push(this.nodes.get(dependentId));
+				}
 				return arr;
 			}, []);
 
@@ -67,7 +69,7 @@ class Tree {
 			return id;
 		}
 
-		const match = /\{(.*)\}/.exec(id);
+		const match = /\{([a-zA-Z]*)\}/.exec(id);
 		return match && match[1];
 	}
 
