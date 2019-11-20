@@ -1,20 +1,26 @@
 const Division = require('./Division');
 
+const STATUS = {
+	CLEAN: 0,
+	NEEDS_RENDER: 1,
+	DIRTY: 2
+};
+
 /**
  * In charge of rendering performance -- keeps track of which divisions need
  * recalculations and which divisions depend on dimensions of another division.
  */
 class Tree {
-	constructor() {
+	constructor(jumper) {
+		this.jumper = jumper;
 		this.nodes = new Map();
-		this.dirtyNodes = new Map();
-		this.needsRenderNodes = new Map();
 	}
 
 	createNode(division) {
 		return {
 			division,
-			links: new Map()
+			status: STATUS.CLEAN,
+			links: new Set() // when this div changes, others need to as well
 		};
 	}
 
@@ -32,8 +38,6 @@ class Tree {
 		for (const id of this.nodes.keys()) {
 			if (!nodesToKeep[id]) {
 				this.nodes.delete(id);
-				this.dirtyNodes.delete(id);
-				this.needsRenderNodes.delete(id);
 			}
 		}
 	}
@@ -43,70 +47,80 @@ class Tree {
 			node.links.clear();
 		}
 
-		const props = ['top', 'left', 'bottom', 'right'];
+		const props = ['top', 'left', 'width', 'height'];
 
 		for (const node of this.nodes.values()) {
 			const id = node.division.options.id;
 
-			const dependentNodes = props.reduce((arr, prop) => {
-				const dependentId = this._getDependentDivisionId(node.division.options[prop]);
-				if (dependentId && dependentId !== id) {
-					arr.push(this.nodes.get(dependentId));
+			const dependentNodes = props.reduce((set, prop) => {
+				const expression = node.division.options[prop];
+				if (typeof expression !== 'string') {
+					return set;
 				}
-				return arr;
-			}, []);
 
-			dependentNodes.forEach(dependent => dependent.links.set(id, node));
+				this.jumper.replaceBrackets(expression, insides => {
+					if (this.jumper.hasDivision(insides) && insides !== id) {
+						set.add(this.nodes.get(insides));
+					}
+				});
+				return set;
+			}, new Set());
+
+			dependentNodes.forEach(dependent => dependent.links.add(node));
 		}
-	}
-
-	_getDependentDivisionId(id) {
-		if (typeof id !== 'string') {
-			return false;
-		}
-
-		if (this.nodes.get(id)) {
-			return id;
-		}
-
-		const match = /\{([^\{\}]*)\}/.exec(id);
-		return match && match[1];
-	}
-
-	setDirty(division) {
-		if (!division) {
-			this.dirtyNodes.clear();
-			this.dirtyNodes = new Map([...this.nodes]);
-			return;
-		}
-
-		const startNode = this.nodes.get(division.options.id);
-
-		if (!startNode) {
-			return;
-		}
-
-		this.traverse(startNode, (node, { depth, parent }) => {
-			if (this.dirtyNodes.has(node.division.options.id)) {
-				return;
-			}
-
-			node.division._resetDimensions();
-
-			node.depth = depth;
-			node.parent = parent;
-
-			this.dirtyNodes.set(node.division.options.id, node);
-		});
 	}
 
 	setNeedsRender(division) {
-		if (!this.nodes.has(division.options.id) || this.dirtyNodes.has(division.options.id)) {
+		if (division) {
+			this.nodes.forEach(node => node.status = node.status || STATUS.NEEDS_RENDER);
 			return;
 		}
 
 		const node = this.nodes.get(division.options.id);
-		this.needsRenderNodes.set(division.options.id, node);
+		if (!node) {
+			return;
+		}
+
+		node.status = node.status || STATUS.NEEDS_RENDER;
+	}
+
+	setDirty(division) {
+		if (!division) {
+			this.nodes.forEach(node => node.status = STATUS.DIRTY);
+			return;
+		}
+
+		const node = this.nodes.get(division.options.id);
+		if (!node) {
+			return;
+		}
+
+		this.traverse(node, (child, { depth, parent }) => {
+			if (child.status === STATUS.DIRTY) {
+				return;
+			}
+
+			child.status = STATUS.DIRTY;
+			child.depth = depth;
+			child.parent = parent;
+
+			child.division._resetDimensions();
+		});
+	}
+
+	calculateDirtyNodes() {
+		this.nodes.forEach(node => {
+			if (node.status === STATUS.DIRTY) {
+				node.division._calculateDimensions(true);
+				node.status = STATUS.NEEDS_RENDER;
+			}
+		});
+	}
+
+	getNeedsRenderNodes() {
+		return Array.from(this.nodes.values()).filter(node => {
+			return node.status === STATUS.NEEDS_RENDER;
+		});
 	}
 
 	traverse(startNode, callback) {
@@ -137,15 +151,13 @@ class Tree {
 		traverse(startNode);
 	}
 
-	clear() {
-		this.dirtyNodes.clear();
-		this.needsRenderNodes.clear();
-
-		this.nodes.forEach(node => node.depth = node.parent = null);
+	clean() {
+		this.nodes.forEach(node => node.status = STATUS.CLEAN);
 	}
 
 	destroy() {
-		this.nodes = this.dirtyNodes = this.needsRenderNodes = null;
+		this.nodes.clear();
+		this.jumper = this.nodes = null;
 	}
 }
 

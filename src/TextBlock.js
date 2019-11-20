@@ -41,13 +41,20 @@ class TextBlock {
 
 		string = string.replace(/\t/g, TAB_FAKER);
 
+		const oldEscaped = this.escapedText;
+		const oldHeight = this.height();
+
 		const escaped = stripAnsi(string);
-		const hasChanged = stringWidth(escaped) !== stringWidth(this.escapedText);
 
 		this.text = string;
 		this.escapedText = escaped;
 
 		this._height = this._lines = null;
+
+		const hasChanged = (
+			stringWidth(escaped) !== stringWidth(oldEscaped) ||
+			oldHeight !== this.height()
+		);
 
 		if (this.division) {
 			hasChanged ? this.division._setDirty() : this.division._setNeedsRender(this);
@@ -134,6 +141,10 @@ class TextBlock {
 
 	_getLines() {
 		const textString = Array.isArray(this.text) ? this.text.join('') : this.text;
+
+		if (!this.division) {
+			return textString.split('\n');
+		}
 
 		if (this.division.options.overflowX === 'wrap') {
 			const lines = [];

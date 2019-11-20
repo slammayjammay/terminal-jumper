@@ -3,7 +3,6 @@ const chalk = require('chalk');
 const wrapAnsi = require('wrap-ansi');
 const stripAnsi = require('strip-ansi');
 const sliceAnsi = require('slice-ansi');
-const evaluator = require('./evaluator');
 const TextBlock = require('./TextBlock');
 
 const SCROLLBAR_VERTICAL_BACKGROUND = chalk.bold.rgb(102, 102, 102)('⎹');
@@ -19,6 +18,7 @@ const DEFAULT_OPTIONS = {
 	id: null,
 
 	/**
+	 * TODO: this is out of date -- no more right or bottom
 	 * Width is required. So is left (or right) and top (or bottom). You can
 	 * specify a fixed number of rows or columns by providing a number. Or you can
 	 * provide a percentage of the terminal's dimensions by providing an
@@ -51,16 +51,6 @@ const DEFAULT_OPTIONS = {
 	left: null,
 
 	/**
-	 * @prop {number|string}
-	 */
-	right: null,
-
-	/**
-	 * @prop {number|string}
-	 */
-	bottom: null,
-
-	/**
 	 * @prop {number}
 	 */
 	width: null,
@@ -76,6 +66,13 @@ const DEFAULT_OPTIONS = {
 	 * @prop {string} overflowX - "wrap|scroll".
 	 */
 	overflowX: 'wrap',
+
+	/**
+	 * @prop {object} scrollBarX - sets the chars for the scroll bar foreground
+	 * and background.
+	 * TODO: rewrite this feature to make use of `renderInjects`
+	 */
+	scrollBarX: false,
 
 	/**
 	 * @prop {object} scrollBarX - sets the chars for the scroll bar foreground
@@ -679,60 +676,7 @@ class Division {
 		}
 	}
 
-	evaluate(expression, fnOrObj) {
-		if (typeof expression === 'number') {
-			return ~~(expression);
-		}
-
-		const replaced = this._replaceId(expression, (id, property) => {
-			if (!this.jumper.hasDivision(id)) {
-				throw new Error(`Division "${id}" not found (from expression "${expression}").`);
-			}
-
-			if (!property) {
-				throw new Error(`Do not know how to use division "${id}" in expression "${expression}" (missing property name after curly braces).`);
-			}
-
-			const div = this.jumper.getDivision(id);
-
-			if (property === 't' || property === 'top') return div.top();
-			if (property === 'l' || property === 'left') return div.left();
-			if (property === 'w' || property === 'width') return div.width();
-			if (property === 'h' || property === 'height') return div.height();
-			if (property === 'b' || property === 'bottom') return div.bottom();
-			if (property === 'r' || property === 'right') return div.right();
-			if (property === 'nh' || property === 'natural-height') return div.naturalHeight();
-
-			throw new Error(`Unknown property "${property}".`);
-		});
-
-		return ~~(evaluator.evaluate(replaced, fnOrObj));
-	}
-
-	/**
-	 * Given an expression and callback, captures anything inside of and
-	 * immediately after curly braces. Replaces it with the return value of the
-	 * callback, which is called given the found values inside and after the
-	 * curly braces.
-	 *
-	 * Example:
-	 * _replaceId('{div-1}top + {div-2}left * 0.5', (inside, after) => {
-	 *   console.log(inside, after);
-	 * });
-	 * // => 'div-1', 'top'
-	 * // => 'div-2', 'left'
-	 *
-	 * @param {expression} string - The expression string.
-	 * @param {function} cb - The callback function, called with the found id,
-	 * that returns the value to replace the id with. Also gives any characters
-	 * directly after the closing bracket.
-	 * @return {string}
-	 */
-	_replaceId(expression, cb) {
-		const reg = /\{([^\{\}]*)\}([\w]*)(?=[^\w]|$)/g;
-		return expression.replace(reg, (_, id, property) => cb(id, property));
-	}
-
+	// TODO: bottom was removed
 	_calculateTop() {
 		const { top, bottom } = this.options;
 
@@ -745,7 +689,7 @@ class Division {
 		if (typeof prop === 'number') {
 			val = isTop ? prop : jumperHeight - prop;
 		} else if (typeof prop === 'string') {
-			val = this.evaluate(prop, { '%': jumperHeight });
+			val = this.jumper.evaluate(prop, { '%': jumperHeight });
 		} else {
 			throw new Error(`${isTop ? 'top' : 'bottom'} property must be a number or string (received: "${prop}").`);
 		}
@@ -753,6 +697,7 @@ class Division {
 		return Math.max(0, isTop ? val : val - this.height());
 	}
 
+	// TODO: right was removed
 	_calculateLeft() {
 		const { left, right } = this.options;
 
@@ -765,7 +710,7 @@ class Division {
 		if (typeof prop === 'number') {
 			val = isLeft ? prop : jumperWidth - prop;
 		} else if (typeof prop === 'string') {
-			val = this.evaluate(prop, { '%': jumperWidth });
+			val = this.jumper.evaluate(prop, { '%': jumperWidth });
 		} else {
 			throw new Error(`${isLeft ? 'left' : 'right'} property must be a number or string (received: "${prop}").`);
 		}
@@ -774,7 +719,7 @@ class Division {
 	}
 
 	_calculateWidth() {
-		return this.evaluate(this.options.width, { '%': this.jumper.width() });
+		return this.jumper.evaluate(this.options.width, { '%': this.jumper.width() });
 	}
 
 	/**
@@ -798,7 +743,7 @@ class Division {
 	 */
 	_calculateHeight() {
 		if (this.options.height) {
-			return this.evaluate(this.options.height, { '%': this.jumper.getAvailableHeight() });
+			return this.jumper.evaluate(this.options.height, { '%': this.jumper.getAvailableHeight() });
 		}
 
 		return this.naturalHeight();
@@ -818,8 +763,9 @@ class Division {
 
 		const jumperHeight = this.jumper.getAvailableHeight();
 
-		if (this.options.bottom !== null) {
-			const bottomPosition = this.evaluate(this.options.bottom, { '%': jumperHeight });
+		// TODO: bottom was removed
+		if (false && this.options.bottom !== null) {
+			const bottomPosition = this.jumper.evaluate(this.options.bottom, { '%': jumperHeight });
 			this._height = Math.min(this._height, this.top() + bottomPosition);
 		} else {
 			this._height = Math.min(this._height, jumperHeight - this.top());
@@ -858,7 +804,7 @@ class Division {
 
 	_setNeedsRender(block) {
 		if (block) {
-			this._height = this._allLines = null;
+			this._allLines = null;
 		}
 
 		this.jumper.setNeedsRender(this);
@@ -870,7 +816,7 @@ class Division {
 
 	_resetDimensions() {
 		if (this.jumper.isInitiallyRendered) {
-			this.jumper.renderInjects.set(`before:${this.options.id}:-erase`, this.eraseString());
+			this.jumper.renderInjects.set(`before:erase:${this.options.id}`, this.eraseString());
 		}
 
 		this._top = this._left = this._width = null;

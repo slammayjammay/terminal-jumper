@@ -3,6 +3,7 @@ const termSize = require('term-size');
 const chalk = require('chalk');
 const ansiEscapes = require('ansi-escapes');
 const getCursorPosition = require('get-cursor-position');
+const evaluator = require('./evaluator');
 const Graph = require('./Graph');
 const Division = require('./Division');
 const TextBlock = require('./TextBlock');
@@ -33,6 +34,8 @@ const DEFAULT_OPTIONS = {
 	 * @type {boolean}
 	 */
 	leaveTopRowAvailable: true,
+
+	bracketsParser: null,
 
 	/**
 	 * Debug mode -- on every render, lists each division's id and colors it to
@@ -69,8 +72,8 @@ class TerminalJumper {
 		this.divisionsHash = {};
 		this.divisions = [];
 
+		this.graph = new Graph(this);
 		this.renderInjects = renderInjects;
-		this.graph = new Graph();
 
 		if (this.options.divisions === 'default') {
 			this.addDivision(DEFAULT_DIVISION_OPTIONS);
@@ -269,6 +272,60 @@ class TerminalJumper {
 		this.graph.calculateGraph();
 	}
 
+	evaluate(expression, fnOrObj) {
+		if (typeof expression === 'number') {
+			return ~~(expression);
+		}
+
+		const replaced = this.replaceBrackets(expression, (insides, after) => {
+			if (this.hasDivision(insides)) {
+				if (!after) {
+					throw new Error(`Do not know how to use division "${insides}" in expression "${expression}" (missing property name after curly braces).`);
+				}
+
+				const div = this.getDivision(insides);
+
+				if (after === 't' || after === 'top') return div.top();
+				if (after === 'l' || after === 'left') return div.left();
+				if (after === 'w' || after === 'width') return div.width();
+				if (after === 'h' || after === 'height') return div.height();
+				if (after === 'b' || after === 'bottom') return div.bottom();
+				if (after === 'r' || after === 'right') return div.right();
+				// TODO: naturalWidth()
+				if (after === 'nh' || after === 'natural-height') return div.naturalHeight();
+
+				throw new Error(`Unknown property "${after}".`);
+			} else if (this.options.bracketsParser) {
+				return this.options.bracketsParser(insides, after);
+			}
+		});
+
+		return ~~(evaluator.evaluate(replaced, fnOrObj));
+	}
+
+	/**
+	 * Given an expression and callback, captures anything inside of and
+	 * immediately after curly braces. Replaces it with the return value of the
+	 * callback, which is called given the found values inside and after the
+	 * curly braces. Runs until there are no more brackets in the expression.
+	 *
+	 * @param {expression} string - The expression string.
+	 * @param {function} cb - The callback function, called with the captured
+	 * chars from the regular expression.
+	 * @return {string}
+	 */
+	replaceBrackets(expression, cb) {
+		const reg = /\{([^\{\}]*)\}([\w]*)(?=[^\w]|$)/;
+		let exp = expression;
+		let match;
+
+		while (match = reg.exec(exp)) {
+			exp = exp.replace(reg, cb(match[1], match[2]));
+		}
+
+		return exp;
+	}
+
 	_setupInitialRender() {
 		// get the cursor position. we only care about which row the cursor is on
 		this.renderPosition = this._getCursorPosition();
@@ -293,22 +350,18 @@ class TerminalJumper {
 			this._setupInitialRender();
 		}
 
-		let writeString = this.renderInjects.inject(/^before:/);
-
-		// set full height divs
-		const height = this.height();
-		this._setFullHeightDivs(height);
-
 		if (this.options.debug) {
 			this._setupDebugDivision();
 		}
 
-		const dirtyNodes = Array.from(this.graph.dirtyNodes.values());
-		const needsRenderNodes = Array.from(this.graph.needsRenderNodes.values());
+		this.graph.calculateDirtyNodes();
 
-		for (const { division } of dirtyNodes) {
-			division._calculateDimensions(true);
-		}
+		let writeString = this.renderInjects.inject(/^before:/);
+
+		// TODO: remove this dumb feature
+		// set full height divs
+		const height = this.height();
+		this._setFullHeightDivs(height);
 
 		const numRowsToAllocate = this.renderPosition.row + height - this.termSize.rows - 1;
 		if (numRowsToAllocate > 0) {
@@ -317,13 +370,13 @@ class TerminalJumper {
 			this.renderPosition.row -= numRowsToAllocate;
 		}
 
-		[...dirtyNodes, ...needsRenderNodes].sort((a, b) => {
+		this.graph.getNeedsRenderNodes().sort((a, b) => {
 			return a.division.options.renderOrder - b.division.options.renderOrder;
-		}).forEach(node => writeString += node.division.renderString());
+		}).forEach((node, idx) => writeString += node.division.renderString());
 
 		writeString += this.renderInjects.inject(/^after:/);
 
-		this.graph.clear();
+		this.graph.clean();
 
 		return writeString;
 	}
@@ -538,9 +591,9 @@ class TerminalJumper {
 		options = Object.assign({}, {
 			id: this._debugDivisionId,
 			width: '40%',
-			bottom: 0,
-			right: 0,
-			renderOrder: 100
+			top: `100% - {${this._debugDivisionId}}height`,
+			left: `100% - {${this._debugDivisionId}}width`,
+			renderOrder: 999
 		}, options);
 
 		this._debugDivisionId = options.id;
@@ -584,7 +637,7 @@ class TerminalJumper {
 		};
 
 		for (const [id, node] of this.graph.nodes.entries()) {
-			if (this.graph.dirtyNodes.has(node.division.options.id)) {
+			if (node.status === 2) {
 				this.graph.traverse(node, (child, { depth }) => {
 					if (checkIfProcessed(child)) return;
 
@@ -599,7 +652,7 @@ class TerminalJumper {
 				if (checkIfProcessed(node)) continue;
 
 				const { id } = node.division.options;
-				const isNeedsRender = this.graph.needsRenderNodes.has(id);
+				const isNeedsRender = node.status === 1;
 				const array = isNeedsRender ? needsRenderBlocks : remainingBlocks;
 				const color = isNeedsRender ? 'yellow' : 'white';
 
