@@ -673,8 +673,6 @@ class Division {
 	}
 
 	/**
-	 * TODO: is this necessary anymore since bottom was removed?
-	 *
 	 * There is a circular dependency problem when we need to calculate both the
 	 * height and the top offset. In order to avoid overflowing the terminal
 	 * window, we need to max out the height at some point (which is dependent on
