@@ -291,7 +291,7 @@ class TerminalJumper {
 				if (after === 'h' || after === 'height') return div.height();
 				if (after === 'b' || after === 'bottom') return div.bottom();
 				if (after === 'r' || after === 'right') return div.right();
-				// TODO: naturalWidth()
+				if (after === 'nw' || after === 'natural-width') return div.naturalWidth();
 				if (after === 'nh' || after === 'natural-height') return div.naturalHeight();
 
 				throw new Error(`Unknown property "${after}".`);
@@ -358,10 +358,7 @@ class TerminalJumper {
 
 		let writeString = this.renderInjects.inject(/^before:/);
 
-		// TODO: remove this dumb feature
-		// set full height divs
 		const height = this.height();
-		this._setFullHeightDivs(height);
 
 		const numRowsToAllocate = this.renderPosition.row + height - this.termSize.rows - 1;
 		if (numRowsToAllocate > 0) {
@@ -562,11 +559,7 @@ class TerminalJumper {
 	_calculateHeight() {
 		let height = 0;
 
-		const divsWithSetHeight = this.divisions.filter(div => {
-			return div.options.height !== 'full';
-		});
-
-		for (const div of divsWithSetHeight) {
+		for (const div of this.divisions) {
 			const divHeight = div.top() + div.height();
 			if (divHeight > height) {
 				height = divHeight;
@@ -574,13 +567,6 @@ class TerminalJumper {
 		}
 
 		return height;
-	}
-
-	_setFullHeightDivs(height) {
-		for (const div of this.divisions.filter(div => div.options.height === 'full')) {
-			div._setHeight(height - div.top());
-			this.graph.setDirty(div);
-		}
 	}
 
 	_addDebugDivision(options) {

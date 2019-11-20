@@ -101,11 +101,7 @@ class Evaluator {
 		return parseFloat(exp);
 	}
 
-	// min(arg1, arg2, arg3)
-	// functionName: 'min'
-	// insides: 'arg1, arg2, arg3'
 	callFunction(functionName, insides, fnOrObj) {
-		// TODO: more functions than just the ones in Math
 		const fn = Math[functionName];
 		if (!fn) {
 			throw new Error(`Does not know how to call function "${functionName}".`);

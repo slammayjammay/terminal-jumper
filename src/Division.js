@@ -19,6 +19,7 @@ const DEFAULT_OPTIONS = {
 
 	/**
 	 * TODO: this is out of date -- no more right or bottom
+	 *
 	 * Width is required. So is left (or right) and top (or bottom). You can
 	 * specify a fixed number of rows or columns by providing a number. Or you can
 	 * provide a percentage of the terminal's dimensions by providing an
@@ -51,14 +52,13 @@ const DEFAULT_OPTIONS = {
 	left: null,
 
 	/**
-	 * @prop {number}
+	 * @prop {number|string}
 	 */
 	width: null,
 
 	/**
 	 * Optional. If not set, will shrink to the height of the content inside.
-	 * @prop {number|string} - If "full", sets the height equal to the height of
-	 * the program.
+	 * @prop {number|string}
 	 */
 	height: null,
 
@@ -262,15 +262,19 @@ class Division {
 	}
 
 	height() {
-		if (this.options.height === 'full') {
-			this._height = this.jumper.height();
-		} else if (this._height === null) {
+		if (this._height === null) {
 			this._height = this._calculateHeight();
 			this._constrainHeight();
 			this._maxScrollY = null;
 		}
 
 		return this._height;
+	}
+
+	naturalWidth() {
+		return this.allLines().reduce((longest, line) => {
+			return Math.max(longest, stripAnsi(line).length);
+		}, 0);
 	}
 
 	naturalHeight() {
@@ -392,15 +396,6 @@ class Division {
 		return this.options.scrollBarY && this.maxScrollY() > 0;
 	}
 
-	/**
-	 * Internally called by TerminalJumper, applicable only for "full height"
-	 * divs. Recalculates any dimensions that depend on height.
-	 */
-	_setHeight(height) {
-		this._height = height;
-		this._maxScrollY = null;
-	}
-
 	_constrainScrollX(scrollX) {
 		if (Math.abs(scrollX) > this.maxScrollX()) {
 			scrollX = this.maxScrollX() * (scrollX < 0 ? -1 : 1);
@@ -431,13 +426,7 @@ class Division {
 
 		// scrollX
 		linesToRender = linesToRender.map(line => {
-			// slice-ansi is not reliable when styled with multiple colors
-			// TODO: this has since been fixed
-			const truncated = sliceAnsi(
-				line,
-				this.scrollPosX(),
-				this.scrollPosX() + this.contentWidth()
-			) + chalk.reset(' ').replace(' ', '');
+			const truncated = sliceAnsi(line, this.scrollPosX(), this.scrollPosX() + this.contentWidth());
 			const length = this.contentWidth() - stripAnsi(truncated).length + 1;
 			const padded = new Array(Math.max(0, length)).join(' ');
 			return truncated + padded;
@@ -516,18 +505,12 @@ class Division {
 			cache[value] = Number.isInteger(cache[value]) ? cache[value] : null;
 		}
 
-		const startLeft = cache.startLeft || this.renderPosition.col + this.left() - 1;
-		const startTop = cache.startTop || this.renderPosition.row + this.top() - 1;
-		const width = cache.width || this.width();
-		const height = (() => {
-			if (cache.height) {
-				return cache.height;
-			} else if (this.options.height === 'full') {
-				return this.jumper.height() - this.top();
-			} else {
-				return this.height();
-			}
-		})();
+		const I = (...args) => Number.isInteger(...args);
+
+		const startLeft = I(cache.startLeft) ? cache.startLeft : this.renderPosition.col + this.left() - 1;
+		const startTop = I(cache.startTop) ? cache.startTop : this.renderPosition.row + this.top() - 1;
+		const width = I(cache.width) ? cache.width : this.width();
+		const height = I(cache.height) ? cache.height : this.height();
 
 		const blankLine = new Array(width + 1).join(' ');
 
@@ -647,7 +630,7 @@ class Division {
 		if (force || this._allLines === null) this._populateLines();
 		if (force || this._width === null) this._width = this._calculateWidth();
 
-		if (this.options.height !== 'full' && (force || this._height === null)) {
+		if (force || this._height === null) {
 			this._height = this._calculateHeight();
 		}
 
@@ -676,53 +659,22 @@ class Division {
 		}
 	}
 
-	// TODO: bottom was removed
 	_calculateTop() {
-		const { top, bottom } = this.options;
-
-		const isTop = top !== null;
-		const prop = isTop ? top : bottom;
-		const jumperHeight = this.jumper.getAvailableHeight();
-
-		let val;
-
-		if (typeof prop === 'number') {
-			val = isTop ? prop : jumperHeight - prop;
-		} else if (typeof prop === 'string') {
-			val = this.jumper.evaluate(prop, { '%': jumperHeight });
-		} else {
-			throw new Error(`${isTop ? 'top' : 'bottom'} property must be a number or string (received: "${prop}").`);
-		}
-
-		return Math.max(0, isTop ? val : val - this.height());
+		return this.jumper.evaluate(this.options.top, { '%': this.jumper.getAvailableHeight() });
 	}
 
-	// TODO: right was removed
 	_calculateLeft() {
-		const { left, right } = this.options;
-
-		const isLeft = left !== null;
-		const prop = isLeft ? left : right;
-		const jumperWidth = this.jumper.width();
-
-		let val;
-
-		if (typeof prop === 'number') {
-			val = isLeft ? prop : jumperWidth - prop;
-		} else if (typeof prop === 'string') {
-			val = this.jumper.evaluate(prop, { '%': jumperWidth });
-		} else {
-			throw new Error(`${isLeft ? 'left' : 'right'} property must be a number or string (received: "${prop}").`);
-		}
-
-		return Math.max(0, isLeft ? val : val - this.width());
+		return this.jumper.evaluate(this.options.left, { '%': this.jumper.width() });
 	}
 
+	// TODO: width should probably be responsive like height
 	_calculateWidth() {
 		return this.jumper.evaluate(this.options.width, { '%': this.jumper.width() });
 	}
 
 	/**
+	 * TODO: is this necessary anymore since bottom was removed?
+	 *
 	 * There is a circular dependency problem when we need to calculate both the
 	 * height and the top offset. In order to avoid overflowing the terminal
 	 * window, we need to max out the height at some point (which is dependent on
@@ -757,19 +709,12 @@ class Division {
 		if (this._height === null) {
 			throw new Error(`Internal error: height must be calculated before it can be constrained.`);
 		}
+
 		if (this._top === null) {
 			this._top = this._calculateTop();
 		}
 
-		const jumperHeight = this.jumper.getAvailableHeight();
-
-		// TODO: bottom was removed
-		if (false && this.options.bottom !== null) {
-			const bottomPosition = this.jumper.evaluate(this.options.bottom, { '%': jumperHeight });
-			this._height = Math.min(this._height, this.top() + bottomPosition);
-		} else {
-			this._height = Math.min(this._height, jumperHeight - this.top());
-		}
+		this._height = Math.min(this._height, this.jumper.getAvailableHeight() - this.top());
 	}
 
 	_populateLines() {
@@ -821,11 +766,7 @@ class Division {
 
 		this._top = this._left = this._width = null;
 		this._maxScrollX = this._maxScrollY = null;
-		this._allLines = null;
-
-		if (this.options.height !== 'full') {
-			this._height = null;
-		}
+		this._height = this._allLines = null;
 	}
 
 	_resize(terminalSize, renderPosition) {
