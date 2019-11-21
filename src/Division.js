@@ -442,7 +442,7 @@ class Division {
 
 			this.jumper.renderInjects.set(`${this.options.id}:after:scroll-bar-y`, () => {
 				const scrollBar = this._constructScrollBar('y', height, height, available, scrollPos);
-				return this.jumpToString(null, -1, 0) + scrollBar.join(ansiEscapes.cursorMove(-1, 1));
+				return this.jumper.jumpToString(this.right() - 1, this.top() - 1) + scrollBar.join(ansiEscapes.cursorMove(-1, 1));
 			});
 		}
 
@@ -454,12 +454,12 @@ class Division {
 
 			this.jumper.renderInjects.set(`${this.options.id}:after:scroll-bar-x`, () => {
 				const scrollBar = this._constructScrollBar('x', width, width, available, scrollPos);
-				return this.jumpToString(null, 0, -1) + scrollBar.join('');
+				return this.jumper.jumpToString(this.left() - 1, this.bottom() - 1) + scrollBar.join('');
 			});
 		}
 
-		const startLeft = this.renderPosition.col + this.left() - 1;
-		const startTop = this.renderPosition.row + this.top() - 1;
+		const startLeft = this.renderPosition.col + this.left();
+		const startTop = this.renderPosition.row + this.top();
 		let lineIncrement = 0;
 
 		for (const line of linesToRender) {
@@ -478,7 +478,7 @@ class Division {
 		const chars = this.options[dir === 'x' ? 'scrollBarX' : 'scrollBarY'];
 
 		const fgPercentage = visible / available;
-		const barLength = ~~(length * fgPercentage);
+		const barLength = Math.max(1, ~~(length * fgPercentage));
 		const barStartIdx = visible + scrollPos === available ?
 			length - barLength :
 			~~(scrollPos / available * length);
@@ -506,8 +506,8 @@ class Division {
 			return Number.isInteger(number) ? number : defaultValue;
 		};
 
-		const startLeft = getDefault(cache.startLeft, this.renderPosition.col + this.left() - 1);
-		const startTop = getDefault(cache.startTop, this.renderPosition.row + this.top() - 1);
+		const startLeft = getDefault(cache.startLeft, this.renderPosition.col + this.left());
+		const startTop = getDefault(cache.startTop, this.renderPosition.row + this.top());
 		const width = getDefault(cache.width, this.width());
 		const height = getDefault(cache.height, this.height());
 
@@ -525,26 +525,12 @@ class Division {
 		return writeString;
 	}
 
-	jumpTo(block, col = 0, row = 0) {
-		process.stdout.write(this.jumpToString(block, col, row));
+	jumpToBlock(block, col = 0, row = 0) {
+		process.stdout.write(this.jumpToBlockString(block, col, row));
 		return this;
 	}
 
-	jumpToString(block, col = 0, row = 0) {
-		if (block) {
-			return this._jumpToBlockString(block, col, row);
-		}
-
-		const jumpX = (col >= 0) ? this.left() : this.left() + this.width();
-		const jumpY = (row >= 0) ? this.top() : this.top() + this.height();
-
-		const x = this.renderPosition.col - 1 + jumpX + col;
-		const y = this.renderPosition.row - 1 + jumpY + row;
-
-		return ansiEscapes.cursorTo(x, y);
-	}
-
-	_jumpToBlockString(block, col = 0, row = 0) {
+	jumpToBlockString(block, col = 0, row = 0) {
 		let writeString = '';
 		let blockId = null;
 
@@ -586,8 +572,8 @@ class Division {
 			jumpY = this.height() - 1;
 		}
 
-		const x = this.renderPosition.col - 1 + this.left() + jumpX;
-		const y = this.renderPosition.row - 1 + this.top() + jumpY;
+		const x = this.renderPosition.col + this.left() + jumpX;
+		const y = this.renderPosition.row + this.top() + jumpY;
 
 		writeString += ansiEscapes.cursorTo(x, y);
 

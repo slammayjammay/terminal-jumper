@@ -295,6 +295,8 @@ class TerminalJumper {
 				if (after === 'h' || after === 'height') return div.height();
 				if (after === 'b' || after === 'bottom') return div.bottom();
 				if (after === 'r' || after === 'right') return div.right();
+				if (after === 'cw' || after === 'content-width') return div.contentWidth();
+				if (after === 'ch' || after === 'content-height') return div.contentHeight();
 				if (after === 'nw' || after === 'natural-width') return div.naturalWidth();
 				if (after === 'nh' || after === 'natural-height') return div.naturalHeight();
 
@@ -333,7 +335,6 @@ class TerminalJumper {
 	_setupInitialRender() {
 		// get the cursor position. we only care about which row the cursor is on
 		this.renderPosition = this._getCursorPosition();
-		this.renderPosition.col = 1;
 		this.isInitiallyRendered = true;
 		this._resize();
 	}
@@ -364,7 +365,7 @@ class TerminalJumper {
 
 		const height = this.height();
 
-		const numRowsToAllocate = this.renderPosition.row + height - this.termSize.rows - 1;
+		const numRowsToAllocate = this.renderPosition.row + height - this.termSize.rows;
 		if (numRowsToAllocate > 0) {
 			writeString += ansiEscapes.cursorTo(0, this.termSize.rows);
 			writeString += new Array(numRowsToAllocate + 1).join('\n');
@@ -396,34 +397,46 @@ class TerminalJumper {
 			this.graph.setNeedsRender(division);
 		}
 
-		const [x, y] = [this.renderPosition.col - 1, this.renderPosition.row - 1];
+		const [x, y] = [this.renderPosition.col, this.renderPosition.row];
 		writeString += ansiEscapes.cursorTo(x, y);
 
 		return writeString;
 	}
 
-	// TODO: replace this with expressions
-	// TODO: add separate `jumpTo` for blocks
-	jumpTo(target, col = 0, row = 0) {
-		const str = this.jumpToString(target, col, row);
+	jumpTo(colExp, rowExp) {
+		const str = this.jumpToString(colExp, rowExp);
 		this._isChaining ? this._chain += str : process.stdout.write(str);
 		return this;
 	}
 
-	jumpToString(target, col = 0, row = 0) {
+	jumpToString(colExp, rowExp) {
 		if (!this.isInitiallyRendered) {
 			return '';
 		}
 
-		let division = target;
-		let blockId;
+		return ansiEscapes.cursorTo(
+			this.evaluate(colExp, { '%': this.width() }),
+			this.evaluate(rowExp, { '%': this.getAvailableHeight() })
+		);
+	}
 
-		if (typeof target === 'string') {
-			[division, blockId] = target.split('.');
-			division = this.getDivision(division);
+	jumpToBlock(targets, col = 0, row = 0) {
+		const str = this.jumpToBlockString(targets, col, row);
+		this._isChaining ? this._chain += str : process.stdout.write(str);
+		return this;
+	}
+
+	jumpToBlockString(targets, col = 0, row = 0) {
+		if (typeof targets !== 'string') {
+			throw new Error(`Must specify division and block ids, separated by a period (received: "${targets}").`);
 		}
 
-		return division.jumpToString(blockId, col, row);
+		if (!this.isInitiallyRendered) {
+			return '';
+		}
+
+		const [divId, blockId] = targets.split('.');
+		return this.getDivision(divId).jumpToBlockString(blockId, col, row);
 	}
 
 	scroll(division, scrollX, scrollY) {
@@ -519,6 +532,10 @@ class TerminalJumper {
 			pos = getCursorPosition.sync();
 		}
 
+		// change to 0-based
+		pos.col--;
+		pos.row--;
+
 		return pos;
 	}
 
@@ -550,7 +567,7 @@ class TerminalJumper {
 		if (this.isInitiallyRendered) {
 			// erase everything on the screen
 			process.stdout.write(
-				ansiEscapes.cursorTo(this.renderPosition.col - 1, this.renderPosition.row - 1) +
+				ansiEscapes.cursorTo(this.renderPosition.col, this.renderPosition.row) +
 				ansiEscapes.eraseDown
 			);
 		}
