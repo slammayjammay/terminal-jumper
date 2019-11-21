@@ -277,6 +277,10 @@ class TerminalJumper {
 			return ~~(expression);
 		}
 
+		if (!fnOrObj) {
+			fnOrObj = { '%w': this.width(), '%h': this.getAvailableHeight() };
+		}
+
 		const replaced = this.replaceBrackets(expression, (insides, after) => {
 			if (this.hasDivision(insides)) {
 				if (!after) {
@@ -398,6 +402,8 @@ class TerminalJumper {
 		return writeString;
 	}
 
+	// TODO: replace this with expressions
+	// TODO: add separate `jumpTo` for blocks
 	jumpTo(target, col = 0, row = 0) {
 		const str = this.jumpToString(target, col, row);
 		this._isChaining ? this._chain += str : process.stdout.write(str);

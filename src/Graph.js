@@ -71,7 +71,7 @@ class Tree {
 	}
 
 	setNeedsRender(division) {
-		if (division) {
+		if (!division) {
 			this.nodes.forEach(node => node.status = node.status || STATUS.NEEDS_RENDER);
 			return;
 		}
@@ -82,6 +82,10 @@ class Tree {
 		}
 
 		node.status = node.status || STATUS.NEEDS_RENDER;
+
+		this.jumper.renderInjects.set(`before:erase:${division.options.id}`, () => {
+			return division.eraseString();
+		});
 	}
 
 	setDirty(division) {

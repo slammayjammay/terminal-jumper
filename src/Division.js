@@ -1,7 +1,7 @@
 const ansiEscapes = require('ansi-escapes');
 const chalk = require('chalk');
+const stringWidth = require('string-width');
 const wrapAnsi = require('wrap-ansi');
-const stripAnsi = require('strip-ansi');
 const sliceAnsi = require('slice-ansi');
 const TextBlock = require('./TextBlock');
 
@@ -261,6 +261,12 @@ class Division {
 		return this.width() - (this.hasScrollBarY() ? 1 : 0);
 	}
 
+	naturalWidth() {
+		return this.allLines().reduce((longest, line) => {
+			return Math.max(longest, stringWidth(line));
+		}, 0);
+	}
+
 	height() {
 		if (this._height === null) {
 			this._height = this._calculateHeight();
@@ -269,16 +275,6 @@ class Division {
 		}
 
 		return this._height;
-	}
-
-	naturalWidth() {
-		return this.allLines().reduce((longest, line) => {
-			return Math.max(longest, stripAnsi(line).length);
-		}, 0);
-	}
-
-	naturalHeight() {
-		return this.allLines().length;
 	}
 
 	/**
@@ -291,6 +287,10 @@ class Division {
 
 		const availableSpace = this.jumper.getAvailableHeight() - this.top() - this.height();
 		return this.height() - (availableSpace > 0 ? 0 : 1);
+	}
+
+	naturalHeight() {
+		return this.allLines().length;
 	}
 
 	allLines() {
@@ -419,53 +419,41 @@ class Division {
 		let renderString = '';
 		let linesToRender = this.allLines();
 
+		const width = this.width();
+		const height = this.height();
+
 		renderString += this.jumper.renderInjects.inject(new RegExp(`^${this.options.id}:before:`));
 
 		// scrollY
-		linesToRender = linesToRender.slice(this.scrollPosY(), this.scrollPosY() + this.contentHeight());
+		linesToRender = linesToRender.slice(this.scrollPosY(), this.scrollPosY() + height);
 
 		// scrollX
 		linesToRender = linesToRender.map(line => {
-			const truncated = sliceAnsi(line, this.scrollPosX(), this.scrollPosX() + this.contentWidth());
-			const length = this.contentWidth() - stripAnsi(truncated).length + 1;
-			const padded = new Array(Math.max(0, length)).join(' ');
-			return truncated + padded;
+			return sliceAnsi(line, this.scrollPosX(), this.scrollPosX() + width);
 		});
 
 		// render vertical scroll bar
 		if (this.hasScrollBarY()) {
-			const heightPercentage = this.contentHeight() / (this.contentHeight() + this.maxScrollY());
-			const scrollBarHeight = ~~(this.contentHeight() * heightPercentage);
-			const travelDistance = ~~(this.contentHeight() * (1 - heightPercentage));
-			const scrollBarStartIdx = ~~(travelDistance * (this.scrollPosY() / this.maxScrollY()));
-			const scrollBarEndIdx = scrollBarStartIdx + scrollBarHeight;
+			const heightPercentage = height / (height + this.maxScrollY());
+			const fgStartIdx = ~~(this.scrollPosY() * heightPercentage);
+			const fgEndIdx = fgStartIdx + ~~(height * heightPercentage);
 
-			linesToRender = linesToRender.map((line, idx) => {
-				let scrollBarChar;
-
-				if (idx >= scrollBarStartIdx && idx <= scrollBarEndIdx) {
-					scrollBarChar = this.options.scrollBarY.foreground;
-				} else {
-					scrollBarChar = this.options.scrollBarY.background;
-				}
-
-				return `${line}${scrollBarChar}`;
+			this.jumper.renderInjects.set(`${this.options.id}:after:scroll-bar-y`, () => {
+				const scrollBar = this._constructScrollBar('y', 0, fgStartIdx, fgEndIdx, height);
+				return this.jumpToString(null, -1, 0) + scrollBar.join(ansiEscapes.cursorMove(-1, 1));
 			});
 		}
 
 		// render horizontal scroll bar
 		if (this.hasScrollBarX()) {
-			const widthPercentage = this.contentWidth() / (this.contentWidth() + this.maxScrollX());
-			const scrollBarWidth = ~~(this.contentWidth() * widthPercentage);
-			const travelDistance = ~~(this.contentWidth() * (1 - widthPercentage));
-			const scrollBarStartIdx = ~~(travelDistance * (this.scrollPosX() / this.maxScrollX()));
+			const widthPercentage = width / (width + this.maxScrollX());
+			const fgStartIdx = ~~(this.scrollPosX() * widthPercentage);
+			const fgEndIdx = fgStartIdx + ~~(width * widthPercentage);
 
-			let horizontalScrollBar = '';
-			horizontalScrollBar += new Array(1 + scrollBarStartIdx).join(this.options.scrollBarX.background);
-			horizontalScrollBar += new Array(1 + scrollBarWidth).join(this.options.scrollBarX.foreground);
-			horizontalScrollBar += new Array(this.contentWidth() - (scrollBarWidth + scrollBarStartIdx)).join(this.options.scrollBarX.background);
-
-			linesToRender.push(horizontalScrollBar);
+			this.jumper.renderInjects.set(`${this.options.id}:after:scroll-bar-x`, () => {
+				const scrollBar = this._constructScrollBar('x', 0, fgStartIdx, fgEndIdx, width);
+				return this.jumpToString(null, 0, -1) + scrollBar.join('');
+			});
 		}
 
 		const startLeft = this.renderPosition.col + this.left() - 1;
@@ -473,21 +461,31 @@ class Division {
 		let lineIncrement = 0;
 
 		for (const line of linesToRender) {
-			renderString += ansiEscapes.cursorTo(startLeft, startTop + lineIncrement);
-			renderString += line;
+			renderString += ansiEscapes.cursorTo(startLeft, startTop + lineIncrement) + line;
 			lineIncrement += 1;
 		}
 
 		renderString += this.jumper.renderInjects.inject(new RegExp(`^${this.options.id}:after:`));
 
-		this._lastRenderCache = {
-			startTop,
-			startLeft,
-			width: this.width(),
-			height: this.height()
-		};
+		this._lastRenderCache = { startTop, startLeft, width, height: height };
 
 		return renderString;
+	}
+
+	_constructScrollBar(dir = 'x', aOpen, bOpen, bClose, aClose) {
+		const chars = this.options[dir === 'x' ? 'scrollBarX' : 'scrollBarY'];
+
+		// ensure scrollbar can full reach the end
+		if (aClose - bClose === 1) {
+			bOpen++;
+			bClose++;
+		}
+
+		return [
+			...(new Array(bOpen - aOpen)).fill(chars.background),
+			...(new Array(bClose - bOpen)).fill(chars.foreground),
+			...(new Array(aClose - bClose)).fill(chars.background)
+		];
 	}
 
 	erase() {
@@ -501,16 +499,14 @@ class Division {
 	eraseString(cache = { ...this._lastRenderCache }) {
 		let writeString = '';
 
-		for (const value of ['startLeft', 'startTop', 'width', 'height']) {
-			cache[value] = Number.isInteger(cache[value]) ? cache[value] : null;
-		}
+		const getDefault = (number, defaultValue) => {
+			return Number.isInteger(number) ? number : defaultValue;
+		};
 
-		const I = (...args) => Number.isInteger(...args);
-
-		const startLeft = I(cache.startLeft) ? cache.startLeft : this.renderPosition.col + this.left() - 1;
-		const startTop = I(cache.startTop) ? cache.startTop : this.renderPosition.row + this.top() - 1;
-		const width = I(cache.width) ? cache.width : this.width();
-		const height = I(cache.height) ? cache.height : this.height();
+		const startLeft = getDefault(cache.startLeft, this.renderPosition.col + this.left() - 1);
+		const startTop = getDefault(cache.startTop, this.renderPosition.row + this.top() - 1);
+		const width = getDefault(cache.width, this.width());
+		const height = getDefault(cache.height, this.height());
 
 		const blankLine = new Array(width + 1).join(' ');
 
@@ -536,7 +532,7 @@ class Division {
 			return this._jumpToBlockString(block, col, row);
 		}
 
-		const jumpX = (col >= 0) ? this.left() : this.left() + this.width() + 1;
+		const jumpX = (col >= 0) ? this.left() : this.left() + this.width();
 		const jumpY = (row >= 0) ? this.top() : this.top() + this.height();
 
 		const x = this.renderPosition.col - 1 + jumpX + col;
@@ -624,7 +620,6 @@ class Division {
 	 *   - sets position of each block (depends on "top" and "left")
 	 *   - calculates maxScrollX (depends on `this._allLines` and "width")
 	 *   - calculates maxScrollY (depends on `this._allLines` and "height")
-	 *   - adjust width/height based on whether scroll bars are present
 	 */
 	_calculateDimensions(force) {
 		if (force || this._allLines === null) this._populateLines();
@@ -696,7 +691,7 @@ class Division {
 			return this.jumper.evaluate(this.options.height, { '%': this.jumper.getAvailableHeight() });
 		}
 
-		return this.naturalHeight();
+		return this.naturalHeight() + (this.hasScrollBarX() ? 1 : 0);
 	}
 
 	/**
@@ -734,11 +729,7 @@ class Division {
 	}
 
 	_calculateMaxScrollX() {
-		const lineLengths = this.allLines().map(line => {
-			return stripAnsi(line).length - this.width();
-		});
-
-		return Math.max(...lineLengths, 0);
+		return Math.max(0, this.naturalWidth() - this.width());
 	}
 
 	_calculateMaxScrollY() {
