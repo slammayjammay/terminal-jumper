@@ -285,6 +285,8 @@ class Division {
 			return this.height();
 		}
 
+		return this.height() - (this.hasScrollBarX() ? 1 : 0);
+
 		const availableSpace = this.jumper.getAvailableHeight() - this.top() - this.height();
 		return this.height() - (availableSpace > 0 ? 0 : 1);
 	}
@@ -434,24 +436,24 @@ class Division {
 
 		// render vertical scroll bar
 		if (this.hasScrollBarY()) {
-			const heightPercentage = height / (height + this.maxScrollY());
-			const fgStartIdx = ~~(this.scrollPosY() * heightPercentage);
-			const fgEndIdx = fgStartIdx + ~~(height * heightPercentage);
+			const height = this.height();
+			const available = height + this.maxScrollY();
+			const scrollPos = this.scrollPosY();
 
 			this.jumper.renderInjects.set(`${this.options.id}:after:scroll-bar-y`, () => {
-				const scrollBar = this._constructScrollBar('y', 0, fgStartIdx, fgEndIdx, height);
+				const scrollBar = this._constructScrollBar('y', height, height, available, scrollPos);
 				return this.jumpToString(null, -1, 0) + scrollBar.join(ansiEscapes.cursorMove(-1, 1));
 			});
 		}
 
 		// render horizontal scroll bar
 		if (this.hasScrollBarX()) {
-			const widthPercentage = width / (width + this.maxScrollX());
-			const fgStartIdx = ~~(this.scrollPosX() * widthPercentage);
-			const fgEndIdx = fgStartIdx + ~~(width * widthPercentage);
+			const width = this.width();
+			const available = width + this.maxScrollX();
+			const scrollPos = this.scrollPosX();
 
 			this.jumper.renderInjects.set(`${this.options.id}:after:scroll-bar-x`, () => {
-				const scrollBar = this._constructScrollBar('x', 0, fgStartIdx, fgEndIdx, width);
+				const scrollBar = this._constructScrollBar('x', width, width, available, scrollPos);
 				return this.jumpToString(null, 0, -1) + scrollBar.join('');
 			});
 		}
@@ -472,19 +474,20 @@ class Division {
 		return renderString;
 	}
 
-	_constructScrollBar(dir = 'x', aOpen, bOpen, bClose, aClose) {
+	_constructScrollBar(dir = 'x', length, visible, available, scrollPos) {
 		const chars = this.options[dir === 'x' ? 'scrollBarX' : 'scrollBarY'];
 
-		// ensure scrollbar can full reach the end
-		if (aClose - bClose === 1) {
-			bOpen++;
-			bClose++;
-		}
+		const fgPercentage = visible / available;
+		const barLength = ~~(length * fgPercentage);
+		const barStartIdx = visible + scrollPos === available ?
+			length - barLength :
+			~~(scrollPos / available * length);
+		const barEndIdx = barStartIdx + barLength;
 
 		return [
-			...(new Array(bOpen - aOpen)).fill(chars.background),
-			...(new Array(bClose - bOpen)).fill(chars.foreground),
-			...(new Array(aClose - bClose)).fill(chars.background)
+			...(new Array(barStartIdx)).fill(chars.background),
+			...(new Array(barLength)).fill(chars.foreground),
+			...(new Array(length - barEndIdx)).fill(chars.background)
 		];
 	}
 
