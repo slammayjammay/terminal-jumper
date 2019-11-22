@@ -355,8 +355,11 @@ class TerminalJumper {
 			this._setupInitialRender();
 		}
 
+		let startTime;
+
 		if (this.options.debug) {
 			this._setupDebugDivision();
+			startTime = process.hrtime();
 		}
 
 		this.graph.calculateDirtyNodes();
@@ -377,6 +380,11 @@ class TerminalJumper {
 		}).forEach((node, idx) => writeString += node.division.renderString());
 
 		writeString += this.renderInjects.inject(/^after:/);
+
+		if (this.options.debug) {
+			const hrtime = process.hrtime(startTime);
+			this._debugRenderInfo({ writeString, hrtime });
+		}
 
 		this.graph.clean();
 
@@ -613,6 +621,8 @@ class TerminalJumper {
 		debugDivision.addBlock(`${chalk.bold.red('● re-calculated & re-rendered')}`, 'legend-red');
 		debugDivision.addBlock(`${chalk.bold.yellow('● re-rendered')}`, 'legend-yellow');
 		debugDivision.addBlock(`${chalk.bold.white('● no change')}`, 'legend-white');
+		debugDivision.addBlock(``, 'render-string-length');
+		debugDivision.addBlock(``, 'hrtime');
 		debugDivision.addBlock(new Array(debugDivision.width()).join('='), 'divider');
 	}
 
@@ -641,8 +651,8 @@ class TerminalJumper {
 			return false;
 		};
 
-		const addBlock = (array, text, color) => {
-			array.push(chalk[color || 'white'](text));
+		const addBlock = (array, text, color = 'white') => {
+			array.push(chalk[color](text));
 		};
 
 		for (const [id, node] of this.graph.nodes.entries()) {
@@ -674,6 +684,12 @@ class TerminalJumper {
 		for (const [idx, block] of allBlocks.entries()) {
 			debugDiv.addBlock(block, `div-block-${idx}`);
 		}
+	}
+
+	_debugRenderInfo({ writeString, hrtime }) {
+		const div = this.getDivision(this._debugDivisionId);
+		div.getBlock('render-string-length').content(`render string length: ${writeString.length}`);
+		div.getBlock('hrtime').content(`total time: ${hrtime[0] + hrtime[1] / 1000000000}s`);
 	}
 }
 
