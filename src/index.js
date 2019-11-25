@@ -405,9 +405,6 @@ class TerminalJumper {
 			this.graph.setNeedsRender(division);
 		}
 
-		const [x, y] = [this.renderPosition.col, this.renderPosition.row];
-		writeString += ansiEscapes.cursorTo(x, y);
-
 		return writeString;
 	}
 

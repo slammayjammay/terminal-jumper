@@ -2,6 +2,7 @@ const ansiEscapes = require('ansi-escapes');
 const chalk = require('chalk');
 const stringWidth = require('string-width');
 const wrapAnsi = require('wrap-ansi');
+const stripAnsi = require('strip-ansi');
 const sliceAnsi = require('slice-ansi');
 const TextBlock = require('./TextBlock');
 
@@ -431,7 +432,15 @@ class Division {
 
 		// scrollX
 		linesToRender = linesToRender.map(line => {
-			return sliceAnsi(line, this.scrollPosX(), this.scrollPosX() + width);
+			line = sliceAnsi(line, this.scrollPosX(), this.scrollPosX() + width);
+
+			// slice-ansi doesn't do surrogate pairs correctly
+			const diff = stringWidth(line) - width;
+			if (diff > 0) {
+				line = sliceAnsi(line, 0, width - diff);
+			}
+
+			return line;
 		});
 
 		// render vertical scroll bar
@@ -441,8 +450,8 @@ class Division {
 			const scrollPos = this.scrollPosY();
 
 			this.jumper.renderInjects.set(`${this.options.id}:after:scroll-bar-y`, () => {
-				const scrollBar = this._constructScrollBar('y', height, height, available, scrollPos);
-				return this.jumper.jumpToString(this.right() - 1, this.top() - 1) + scrollBar.join(ansiEscapes.cursorMove(-1, 1));
+				const scrollBar = this._constructScrollBar('y', height - 1, height, available, scrollPos);
+				return this.jumper.jumpToString(this.right() - 1, this.top()) + scrollBar.join(ansiEscapes.cursorMove(-1, 1));
 			});
 		}
 
