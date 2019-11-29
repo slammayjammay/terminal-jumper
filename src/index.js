@@ -278,7 +278,15 @@ class TerminalJumper {
 		}
 
 		if (!fnOrObj) {
-			fnOrObj = { '%w': this.width(), '%h': this.getAvailableHeight() };
+			fnOrObj = (num, unit) => {
+				if (unit === '%w') {
+					return this.width() * num / 100;
+				} else if (unit === '%h') {
+					return this.height() * num / 100;
+				}
+
+				throw new Error(`Unrecognized unit "${unit}" found in expression "${expression}".`);
+			};
 		}
 
 		const replaced = this.replaceBrackets(expression, (insides, after) => {

@@ -169,7 +169,7 @@ class Evaluator {
 			if (typeof additional !== 'number') {
 				throw new Error(`Do not know how to parse "${num}${unit}" -- please provide a number associated with "${unit}" to calculate against, or provide a custom parsing function (received "${additional}").`);
 			}
-			return parseFloat(num) / 100 * additional;
+			return num / 100 * additional;
 		}
 	}
 
