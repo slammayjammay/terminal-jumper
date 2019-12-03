@@ -310,7 +310,11 @@ class TerminalJumper {
 
 				throw new Error(`Unknown property "${after}".`);
 			} else if (this.options.bracketsParser) {
-				return this.options.bracketsParser(insides, after);
+				const parsed = this.options.bracketsParser(insides, after);
+				if (!parsed) {
+					throw new Error(`Must return a value from parsed brackets expression "${insides}, ${after}".`);
+				}
+				return parsed;
 			}
 		});
 

@@ -208,8 +208,28 @@ class Division {
 		this._setDirty();
 	}
 
+	getBlockAtIndex(index) {
+		const id = this.blockIds[index];
+
+		if (!id) {
+			throw new Error(`Could not find block at index "${index}".`);
+		}
+
+		return this.getBlock(id);
+	}
+
+	hasBlockAtIndex(index) {
+		return !!this.blockIds[index];
+	}
+
+	removeBlockAtIndex(index) {
+		return this.removeBlock(this.getBlockAtIndex(index));
+	}
+
 	reset() {
 		this._setDirty();
+
+		// TODO: why is this not in _resetDimensions
 		this._scrollPosX = this._scrollPosY = 0;
 
 		for (const id of this.blockIds) {
@@ -220,6 +240,29 @@ class Division {
 		this.blockHash = {};
 		this._blockPositions = {};
 		this._uniqueIdCounter = 0;
+	}
+
+	/**
+	 * @param {string|array<string>} content
+	 */
+	content(content) {
+		if (!Array.isArray(content)) {
+			content = [content];
+		}
+
+		let [i, l] = [0, content.length];
+
+		for (i; i < l; i++) {
+			if (this.hasBlockAtIndex(i)) {
+				this.getBlockAtIndex(i).content(content[i]);
+			} else {
+				this.addBlock(content[i]);
+			}
+		}
+
+		while (this.hasBlockAtIndex(i)) {
+			this.removeBlockAtIndex(i);
+		}
 	}
 
 	top() {
