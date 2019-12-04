@@ -19,6 +19,14 @@ class RenderInjects {
 
 		return string;
 	}
+
+	remove(onlyIf) {
+		for (const [key, value] of Array.from(this.map.entries())) {
+			if (onlyIf.test(key)) {
+				this.map.delete(key);
+			}
+		}
+	}
 }
 
 module.exports = new RenderInjects();

@@ -312,9 +312,11 @@ class TerminalJumper {
 			} else if (this.options.bracketsParser) {
 				const parsed = this.options.bracketsParser(insides, after);
 				if (!parsed) {
-					throw new Error(`Must return a value from parsed brackets expression "${insides}, ${after}".`);
+					throw new Error(`Must return a value from parsed brackets expression "{${insides}}${after}".`);
 				}
 				return parsed;
+			} else {
+				throw new Error(`Unknown brackets expression: "{${insides}}${after}".`)
 			}
 		});
 
@@ -529,6 +531,12 @@ class TerminalJumper {
 			division.destroy();
 		}
 
+		this.renderInjects.remove(/^before:/);
+		this.renderInjects.remove(/^after:/);
+
+		this.isInitiallyRendered = this.renderInjects = null;
+		this._isChaining = this._chain = null;
+		this._uniqueIdCounter = this._debugDivisionId = null;
 		this.divisions = this.divisionsHash = null;
 		this.termSize = this.renderPosition = null;
 
