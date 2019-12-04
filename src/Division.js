@@ -76,10 +76,10 @@ const DEFAULT_OPTIONS = {
 	scrollBarX: false,
 
 	/**
-	 * @prop {object} scrollBarX - sets the chars for the scroll bar foreground
+	 * @prop {object} scrollBarY - sets the chars for the scroll bar foreground
 	 * and background.
 	 */
-	scrollBarX: false,
+	scrollBarY: false,
 
 	/**
 	 * Determines the order of division renders. Divisions with lower renderOrder
@@ -144,22 +144,7 @@ class Division {
 			throw new Error('Must set overflowX as "scroll" if scroll bars are present.');
 		}
 
-		const parsedOptions = Object.assign({}, DEFAULT_OPTIONS, options);
-
-		// set default scrollbar chars
-		if (parsedOptions.scrollBarX) {
-			parsedOptions.scrollBarX = typeof parsedOptions.scrollBarX === 'object' ? parsedOptions.scrollBarX : {};
-			parsedOptions.scrollBarX.background = parsedOptions.scrollBarX.background || SCROLLBAR_HORIZONTAL_BACKGROUND;
-			parsedOptions.scrollBarX.foreground = parsedOptions.scrollBarX.foreground || SCROLLBAR_HORIZONTAL_FOREGROUND;
-		}
-
-		if (parsedOptions.scrollBarY) {
-			parsedOptions.scrollBarY = typeof parsedOptions.scrollBarY === 'object' ? parsedOptions.scrollBarY : {};
-			parsedOptions.scrollBarY.background = parsedOptions.scrollBarY.background || SCROLLBAR_VERTICAL_BACKGROUND;
-			parsedOptions.scrollBarY.foreground = parsedOptions.scrollBarY.foreground || SCROLLBAR_VERTICAL_FOREGROUND;
-		}
-
-		return parsedOptions;
+		return Object.assign({}, DEFAULT_OPTIONS, options);
 	}
 
 	addBlock(text, id, idx) {
@@ -246,7 +231,9 @@ class Division {
 	 * @param {string|array<string>} content
 	 */
 	content(content) {
-		if (!Array.isArray(content)) {
+		if (!content) {
+			content = [];
+		} else if (!Array.isArray(content)) {
 			content = [content];
 		}
 
@@ -506,7 +493,7 @@ class Division {
 
 			this.jumper.renderInjects.set(`${this.options.id}:after:scroll-bar-x`, () => {
 				const scrollBar = this._constructScrollBar('x', width, width, available, scrollPos);
-				return this.jumper.jumpToString(this.left() - 1, this.bottom() - 1) + scrollBar.join('');
+				return this.jumper.jumpToString(this.left(), this.bottom() - 1) + scrollBar.join('');
 			});
 		}
 
@@ -527,7 +514,16 @@ class Division {
 	}
 
 	_constructScrollBar(dir = 'x', length, visible, available, scrollPos) {
-		const chars = this.options[dir === 'x' ? 'scrollBarX' : 'scrollBarY'];
+		let fg, bg;
+		const scrollBar = this.options[dir === 'x' ? 'scrollBarX' : 'scrollBarY'];
+
+		if (typeof scrollBar === 'object') {
+			[fg, bg] = [scrollBar.foreground, scrollBar.background];
+		} else if (dir === 'x') {
+			[fg, bg] = [SCROLLBAR_HORIZONTAL_FOREGROUND, SCROLLBAR_HORIZONTAL_BACKGROUND];
+		} else if (dir === 'y') {
+			[fg, bg] = [SCROLLBAR_VERTICAL_FOREGROUND, SCROLLBAR_VERTICAL_BACKGROUND];
+		}
 
 		const fgPercentage = visible / available;
 		const barLength = Math.max(1, ~~(length * fgPercentage));
@@ -537,9 +533,9 @@ class Division {
 		const barEndIdx = barStartIdx + barLength;
 
 		return [
-			...(new Array(barStartIdx)).fill(chars.background),
-			...(new Array(barLength)).fill(chars.foreground),
-			...(new Array(length - barEndIdx)).fill(chars.background)
+			...(new Array(barStartIdx)).fill(bg),
+			...(new Array(barLength)).fill(fg),
+			...(new Array(length - barEndIdx)).fill(bg)
 		];
 	}
 
