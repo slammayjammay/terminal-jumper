@@ -40,6 +40,7 @@ class TextBlock {
 		}
 
 		string = string.replace(/\t/g, TAB_FAKER);
+		string = string.replace('\r', '?');
 
 		const oldEscaped = this.escapedText;
 		const oldHeight = this.height();
