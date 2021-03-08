@@ -1,3 +1,4 @@
+const { spawnSync } = require('child_process');
 const debounce = require('lodash.debounce');
 const termSize = require('term-size');
 const chalk = require('chalk');
@@ -24,15 +25,7 @@ const DEFAULT_OPTIONS = {
 	 */
 	divisions: [],
 
-	/**
-	 * If true, caps the max height of TerminalJumper to the number of rows minus
-	 * one. The purpose of this is to show the command that prompted the program.
-	 * Set to false if TerminalJumper should cap the max height to the full number
-	 * of rows.
-	 *
-	 * @type {boolean}
-	 */
-	leaveTopRowAvailable: true,
+	useAlternateScreen: true,
 
 	bracketsParser: null,
 
@@ -60,7 +53,6 @@ class TerminalJumper {
 		this._onResizeDebounced = debounce(this._onResizeDebounced.bind(this), 200);
 
 		this.renderPosition = null; // top left corner of the program
-		this.isInitiallyRendered = false; // have we rendered once already?
 		this._isChaining = false; // is writing to a string, or stdout directly?
 		this._chain = ''; // internal string, to be written to stdout
 		this._uniqueIdCounter = 0; // counter for unique division id
@@ -346,8 +338,20 @@ class TerminalJumper {
 	}
 
 	init() {
+		if (this.options.useAlternateScreen) {
+			this.smcup();
+		}
+
 		this.renderPosition = { row: 0, col: 0 };
 		this._resize();
+	}
+
+	smcup() {
+		spawnSync('tput smcup', { shell: true, stdio: 'inherit' });
+	}
+
+	rmcup() {
+		spawnSync('tput rmcup', { shell: true, stdio: 'inherit' });
 	}
 
 	render() {
@@ -502,7 +506,7 @@ class TerminalJumper {
 	}
 
 	getAvailableHeight() {
-		return this.termSize.rows - (this.options.leaveTopRowAvailable ? 1 : 0);
+		return this.termSize.rows;
 	}
 
 	destroy() {
@@ -515,7 +519,7 @@ class TerminalJumper {
 		this.renderInjects.remove(/^before:/);
 		this.renderInjects.remove(/^after:/);
 
-		this.isInitiallyRendered = this.renderInjects = null;
+		this.options = this.renderInjects = null;
 		this._isChaining = this._chain = null;
 		this._uniqueIdCounter = this._debugDivisionId = null;
 		this.divisions = this.divisionsHash = null;
