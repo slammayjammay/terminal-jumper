@@ -2,7 +2,6 @@ const debounce = require('lodash.debounce');
 const termSize = require('term-size');
 const chalk = require('chalk');
 const ansiEscapes = require('ansi-escapes');
-const getCursorPosition = require('get-cursor-position');
 const evaluator = require('./evaluator');
 const Graph = require('./Graph');
 const Division = require('./Division');
@@ -346,18 +345,12 @@ class TerminalJumper {
 		return exp;
 	}
 
-	_setupInitialRender() {
-		// get the cursor position. we only care about which row the cursor is on
-		this.renderPosition = this._getCursorPosition();
-		this.isInitiallyRendered = true;
+	init() {
+		this.renderPosition = { row: 0, col: 0 };
 		this._resize();
 	}
 
 	render() {
-		if (!this.isInitiallyRendered) {
-			this._setupInitialRender();
-		}
-
 		const str = this.renderString();
 		this._isChaining ? this._chain += str : process.stdout.write(str);
 
@@ -365,10 +358,6 @@ class TerminalJumper {
 	}
 
 	renderString() {
-		if (!this.isInitiallyRendered) {
-			this._setupInitialRender();
-		}
-
 		let startTime;
 
 		if (this.options.debug) {
@@ -429,10 +418,6 @@ class TerminalJumper {
 	}
 
 	jumpToString(colExp, rowExp) {
-		if (!this.isInitiallyRendered) {
-			return '';
-		}
-
 		return ansiEscapes.cursorTo(
 			this.evaluate(colExp, { '%': this.width() }),
 			this.evaluate(rowExp, { '%': this.getAvailableHeight() })
@@ -448,10 +433,6 @@ class TerminalJumper {
 	jumpToBlockString(targets, col = 0, row = 0) {
 		if (typeof targets !== 'string') {
 			throw new Error(`Must specify division and block ids, separated by a period (received: "${targets}").`);
-		}
-
-		if (!this.isInitiallyRendered) {
-			return '';
 		}
 
 		const [divId, blockId] = targets.split('.');
@@ -543,27 +524,6 @@ class TerminalJumper {
 		process.stdout.removeListener('resize', this._onResizeDebounced);
 	}
 
-	/**
-	 * Wrapper for `get-cursor-position`. It appears that if stdin is written to
-	 * before getting the cursor position, it doesn't work properly. A subsequent
-	 * call to it will work, however.
-	 * This only needs to be called once, for the initial render. Afterward we
-	 * can deduce the cursor position based on division/block dimensions.
-	 */
-	_getCursorPosition() {
-		let pos;
-
-		while (!pos) {
-			pos = getCursorPosition.sync();
-		}
-
-		// change to 0-based
-		pos.col--;
-		pos.row--;
-
-		return pos;
-	}
-
 	setDirty(division) {
 		if (typeof division === 'string') {
 			division = this.getDivision(division);
@@ -589,13 +549,11 @@ class TerminalJumper {
 	_resize() {
 		this.termSize = this.getTermSize();
 
-		if (this.isInitiallyRendered) {
-			// erase everything on the screen
-			process.stdout.write(
-				ansiEscapes.cursorTo(this.renderPosition.col, this.renderPosition.row) +
-				ansiEscapes.eraseDown
-			);
-		}
+		// erase everything on the screen
+		process.stdout.write(
+			ansiEscapes.cursorTo(0, 0) +
+			ansiEscapes.eraseDown
+		);
 
 		for (const division of this.divisions) {
 			division._resize(this.termSize, this.renderPosition);

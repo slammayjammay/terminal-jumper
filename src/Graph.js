@@ -90,8 +90,7 @@ class Tree {
 
 	setDirty(division) {
 		if (!division) {
-			this.nodes.forEach(node => node.status = STATUS.DIRTY);
-			return;
+			return this.nodes.forEach(node => node.status = STATUS.DIRTY);
 		}
 
 		const node = this.nodes.get(division.options.id);

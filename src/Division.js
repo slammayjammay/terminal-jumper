@@ -786,9 +786,7 @@ class Division {
 	}
 
 	_resetDimensions() {
-		if (this.jumper.isInitiallyRendered) {
-			this.jumper.renderInjects.set(`before:erase:${this.options.id}`, this.eraseString());
-		}
+		this.jumper.renderInjects.set(`before:erase:${this.options.id}`, this.eraseString());
 
 		this._top = this._left = this._width = null;
 		this._maxScrollX = this._maxScrollY = null;
