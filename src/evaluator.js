@@ -150,13 +150,19 @@ class Evaluator {
 			return number;
 		}
 
+		let value = null;
+
 		if (typeof fnOrObj === 'function') {
-			return fnOrObj(number, unit);
+			value = fnOrObj(number, unit);
 		} else if (typeof fnOrObj === 'object') {
-			return this.defaultUnitParser(number, unit, fnOrObj[unit]);
-		} else {
+			value = this.defaultUnitParser(number, unit, fnOrObj[unit]);
+		}
+
+		if (value === null) {
 			throw new Error(`Do not know how to calculate unit "${unit}" in expression "${expression}", (with map "${fnOrObj}").`);
 		}
+
+		return value;
 	}
 
 	/**
@@ -171,6 +177,8 @@ class Evaluator {
 			}
 			return num / 100 * additional;
 		}
+
+		return null;
 	}
 
 	_createOperationRegex(operand = REGS.OPERAND) {
