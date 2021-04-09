@@ -134,6 +134,7 @@ class TextBlock {
 
 	destroy() {
 		this.text = this.escapedText = this.division = null;
+		this._height = this._lines = null;
 	}
 
 	_calculateHeight() {

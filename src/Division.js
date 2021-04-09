@@ -68,10 +68,11 @@ const DEFAULT_OPTIONS = {
 	 */
 	overflowX: 'wrap',
 
+	wrapOnWord: true,
+
 	/**
 	 * @prop {object} scrollBarX - sets the chars for the scroll bar foreground
 	 * and background.
-	 * TODO: rewrite this feature to make use of `renderInjects`
 	 */
 	scrollBarX: false,
 
@@ -422,11 +423,11 @@ class Division {
 	}
 
 	hasScrollBarX() {
-		return this.options.scrollBarX && this.maxScrollX() > 0;
+		return this.options.scrollBarX;
 	}
 
 	hasScrollBarY() {
-		return this.options.scrollBarY && this.maxScrollY() > 0;
+		return this.options.scrollBarY;
 	}
 
 	_constrainScrollX(scrollX) {
@@ -480,7 +481,7 @@ class Division {
 			const scrollPos = this.scrollPosY();
 
 			this.jumper.renderInjects.set(`${this.options.id}:after:scroll-bar-y`, () => {
-				const scrollBar = this._constructScrollBar('y', height - 1, height, available, scrollPos);
+				const scrollBar = this._constructScrollBar('y', height, height, available, scrollPos);
 				return this.jumper.jumpToString(this.right() - 1, this.top()) + scrollBar.join(ansiEscapes.cursorMove(-1, 1));
 			});
 		}
@@ -514,6 +515,10 @@ class Division {
 	}
 
 	_constructScrollBar(dir = 'x', length, visible, available, scrollPos) {
+		if (visible === available) {
+			return [];
+		}
+
 		let fg, bg;
 		const scrollBar = this.options[dir === 'x' ? 'scrollBarX' : 'scrollBarY'];
 
@@ -591,6 +596,7 @@ class Division {
 			});
 		}
 
+		const blockHeight = block.height() - 1;
 		const blockPos = this._blockPositions[blockId];
 		const blockRowPos = blockPos.row + row + (row < 0 ? block.height() : 0);
 		const blockColPos = blockPos.col + col + (col < 0 ? block.getWidthOnRow(row) + 1 : 0);
@@ -614,10 +620,10 @@ class Division {
 			this.scrollUp(Math.abs(jumpY));
 			writeString += this.jumper.renderString();
 			jumpY = 0;
-		} else if (blockRowPos - this.scrollPosY() > this.height()) {
-			this.scrollDown(Math.abs(jumpY) - (this.height() - 1));
+		} else if (blockRowPos + blockHeight - this.scrollPosY() > this.height() - 1) {
+			this.scrollDown(Math.abs(jumpY) - (this.height() - 1 - blockHeight));
 			writeString += this.jumper.renderString();
-			jumpY = this.height() - 1;
+			jumpY = this.height() - 1 - blockHeight;
 		}
 
 		const x = this.renderPosition.col + this.left() + jumpX;
