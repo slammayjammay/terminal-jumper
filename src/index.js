@@ -85,9 +85,12 @@ class TerminalJumper {
 	 * @return {Division} - a Division instance.
 	 */
 	addDivision(division, calculate = true) {
+		this.renderInjects.set('before:erase-all', this.eraseString());
+
 		if (Array.isArray(division)) {
 			division.forEach(division => this.addDivision(division, false));
 			this.calculateGraph();
+			this.setDirty();
 			return;
 		}
 
@@ -103,8 +106,10 @@ class TerminalJumper {
 		this.divisionsHash[id] = division;
 		this.divisions.push(division);
 
-		calculate && this.calculateGraph();
-		this.setDirty(division);
+		if (calculate) {
+			this.calculateGraph();
+			this.setDirty();
+		}
 
 		return division;
 	}
@@ -124,9 +129,12 @@ class TerminalJumper {
 	}
 
 	removeDivision(division, calculate = true) {
+		this.renderInjects.set('before:erase-all', this.eraseString());
+
 		if (Array.isArray(division)) {
 			division.forEach(division => this.removeDivision(division, false));
 			this.calculateGraph();
+			this.setDirty();
 			return;
 		}
 
@@ -137,9 +145,10 @@ class TerminalJumper {
 		delete this.divisionsHash[division.options.id];
 		this.divisions.splice(this.divisions.indexOf(division), 1);
 
-		this.setDirty(division);
-
-		calculate && this.calculateGraph();
+		if (calculate) {
+			this.calculateGraph();
+			this.setDirty();
+		}
 	}
 
 	reset() {
@@ -413,6 +422,25 @@ class TerminalJumper {
 		}
 
 		return writeString;
+	}
+
+	fillRect(...args) {
+		const str = this.fillRectString(...args);
+		this._isChaining ? this._chain += str : process.stdout.write(str);
+		return this;
+	}
+
+	fillRectString(x, y, width, height, char = ' ') {
+		width = this.evaluate(width);
+		height = this.evaluate(height);
+
+		const line = new Array(width).fill(char).join('');
+		const lines = new Array(height).fill(line);
+
+		return [
+			this.jumpToString(x, y) +
+			lines.join(ansiEscapes.cursorMove(-width, 1))
+		].join('');
 	}
 
 	jumpTo(colExp, rowExp) {

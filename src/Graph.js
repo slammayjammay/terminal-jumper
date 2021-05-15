@@ -43,8 +43,8 @@ class Tree {
 	}
 
 	calculateGraph() {
-		for (const node of this.nodes.values()) {
-			node.links.clear();
+		for (const [id, node] of this.nodes.entries()) {
+			this.jumper.hasDivision(id) ? node.links.clear() : this.nodes.delete(id);
 		}
 
 		const props = ['top', 'left', 'width', 'height'];
